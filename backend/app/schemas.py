@@ -62,3 +62,29 @@ class WallScrap(BaseModel):
 class WallFeed(BaseModel):
     scraps: list[WallScrap]
     counts: dict[str, int]
+
+
+class TagesberichtSection(BaseModel):
+    h: str
+    body: str
+
+
+class NewsHit(BaseModel):
+    title: str
+    url: str
+
+
+class AskNewsOut(BaseModel):
+    answer: str
+    cited: list[CitedScrap]
+    news: list[NewsHit]
+
+
+class TagesberichtOut(BaseModel):
+    nr: int
+    date: str
+    intro: str
+    sections: list[TagesberichtSection]
+    cited: list[str] = []
+    counts: dict[str, int] = {}
+    generated_at: datetime

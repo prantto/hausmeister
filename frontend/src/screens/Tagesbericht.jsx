@@ -1,6 +1,8 @@
+import { useEffect, useState } from "react";
 import { TAGESBERICHT } from "../data/corpus.js";
+import { fetchTagesbericht } from "../lib/api.js";
 
-const STATS = [
+const FALLBACK_stats = [
   { k: "Scraps total",    v: "247" },
   { k: "On the wall",     v: "61"  },
   { k: "Purged (safety)", v: "31"  },
@@ -9,10 +11,35 @@ const STATS = [
   { k: "Median funny",    v: "5.4" },
 ];
 
-const CITED = ["umlaut-88", "kartoffel-04", "lampe-90", "muelltonne-15", "schimmel-77"];
+const FALLBACK_cited = ["umlaut-88", "kartoffel-04", "lampe-90", "muelltonne-15", "schimmel-77"];
 
 export default function Tagesbericht() {
-  const r = TAGESBERICHT;
+  const [r, setR] = useState(TAGESBERICHT);
+  const [stats, setStats] = useState(FALLBACK_stats);
+  const [cited, setCited] = useState(FALLBACK_cited);
+  const [live, setLive] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const load = async (refresh = false) => {
+    setRefreshing(true);
+    try {
+      const data = await fetchTagesbericht({ refresh });
+      setR({ date: data.date, intro: data.intro, sections: data.sections });
+      setLive(true);
+      if (data.cited?.length) setCited(data.cited);
+      if (data.counts?.total != null) {
+        setStats((prev) => prev.map((s) => (s.k === "Scraps total" ? { ...s, v: String(data.counts.total) } : s)));
+      }
+    } catch {
+      // backend down — keep showing the seed report
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  useEffect(() => {
+    load();
+  }, []);
   return (
     <div className="hm-bigscreen hm-sans">
       <div
@@ -62,10 +89,24 @@ export default function Tagesbericht() {
               className="hm-stamp-label"
               style={{ color: "var(--muted-foreground)", marginTop: 12, fontSize: 9 }}
             >
-              Generated · LLM
+              {live ? "Generated · LLM · live" : "Generated · LLM · cached"}
               <br />
-              Corpus slice: FRI 18:00 → SAT 10:00
+              Corpus slice: rolling
             </div>
+            <button
+              onClick={() => load(true)}
+              disabled={refreshing}
+              className="hm-chip"
+              style={{
+                cursor: "pointer",
+                background: "transparent",
+                marginTop: 8,
+                color: "var(--olive)",
+                borderColor: "var(--olive)",
+              }}
+            >
+              {refreshing ? "regenerating…" : "↻ regenerate"}
+            </button>
           </div>
         </div>
       </div>
@@ -137,7 +178,7 @@ export default function Tagesbericht() {
           <div className="hm-aushang-frame" style={{ padding: "20px 18px 16px" }}>
             <span className="hm-aushang-label">Kennzahlen · stats</span>
             <div style={{ paddingTop: 4 }}>
-              {STATS.map((row, i) => (
+              {stats.map((row, i) => (
                 <div
                   key={row.k}
                   style={{
@@ -146,7 +187,7 @@ export default function Tagesbericht() {
                     alignItems: "baseline",
                     padding: "8px 0",
                     borderBottom:
-                      i === STATS.length - 1 ? "none" : "1px dashed var(--border)",
+                      i === stats.length - 1 ? "none" : "1px dashed var(--border)",
                   }}
                 >
                   <span
@@ -179,7 +220,7 @@ export default function Tagesbericht() {
                 lineHeight: 1.6,
               }}
             >
-              {CITED.map((h) => (
+              {cited.map((h) => (
                 <li key={h} style={{ display: "flex", gap: 8, padding: "3px 0" }}>
                   <span className="hm-stamp-label" style={{ color: "var(--olive)" }}>
                     →

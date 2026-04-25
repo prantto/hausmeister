@@ -6,4 +6,5 @@ psycopg[binary]==3.2.3
 psycopg-pool==3.2.3
 pgvector==0.3.6
 google-genai==0.3.0
+httpx==0.27.2
 python-dotenv==1.0.1

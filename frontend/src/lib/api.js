@@ -32,6 +32,10 @@ export async function fetchWall({ limit = 8, minScore = 6 } = {}) {
   return request("GET", `/wall?limit=${limit}&min_score=${minScore}`);
 }
 
+export async function fetchTagesbericht({ refresh = false } = {}) {
+  return request("GET", `/tagesbericht${refresh ? "?refresh=true" : ""}`);
+}
+
 export async function adminList(password, limit = 100) {
   return request("GET", `/admin/scraps?limit=${limit}`, {
     headers: { "X-Admin-Password": password },

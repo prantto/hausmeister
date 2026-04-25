@@ -11,14 +11,18 @@ from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, File, Header, HTTPException, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
 
-from . import db, llm
+from . import db, llm, news
 from .schemas import (
     AdminScrap,
     AskIn,
+    AskNewsOut,
     AskOut,
     CitedScrap,
+    NewsHit,
     ScrapIn,
     ScrapOut,
+    TagesberichtOut,
+    TagesberichtSection,
     WallFeed,
     WallScrap,
 )
@@ -65,6 +69,80 @@ async def transcribe(file: UploadFile = File(...)):
         raise HTTPException(status_code=413, detail="audio too large")
     text = llm.transcribe(audio, file.content_type or "audio/webm")
     return {"text": text}
+
+
+_TAGESBERICHT_CACHE: dict = {}  # 5-minute LLM cache so repeated wall pulls are cheap
+
+
+@app.get("/tagesbericht", response_model=TagesberichtOut)
+async def get_tagesbericht(top: int = 12, refresh: bool = False):
+    import datetime as dt
+
+    cached = _TAGESBERICHT_CACHE.get("v")
+    if cached and not refresh and (dt.datetime.utcnow() - cached["generated_at"]).total_seconds() < 300:
+        return cached["payload"]
+
+    async with db.conn() as c:
+        async with c.cursor() as cur:
+            await cur.execute(
+                """
+                SELECT handle, body
+                FROM scraps
+                ORDER BY funny_score DESC NULLS LAST, created_at DESC
+                LIMIT %s
+                """,
+                (top,),
+            )
+            rows = await cur.fetchall()
+            await cur.execute("SELECT count(*) FROM scraps")
+            (total,) = await cur.fetchone()
+
+    top_scraps = [{"handle": r[0], "body": r[1]} for r in rows]
+    now = dt.datetime.utcnow()
+    weekday = now.strftime("%A").upper()
+    time_label = f"{weekday} · {now.strftime('%H:%M')}"
+    deadline = now.replace(hour=14, minute=0, second=0, microsecond=0)
+    while deadline.weekday() != 6:  # Sunday
+        deadline += dt.timedelta(days=1)
+    hours_to_deadline = max(0, int((deadline - now).total_seconds() // 3600))
+
+    try:
+        body = llm.tagesbericht(
+            time_label=time_label,
+            report_index=2,
+            n_scraps=total,
+            top_scraps=top_scraps,
+            hours_to_deadline=hours_to_deadline,
+        )
+        sections = [TagesberichtSection(**s) for s in body.get("sections", [])]
+        cited = list(body.get("cited") or [])
+        intro = body.get("intro", "")
+    except Exception as exc:
+        # Soft fallback so /tagesbericht always returns something for the demo.
+        sections = [
+            TagesberichtSection(
+                h="Corpus health",
+                body=f"{total} scraps total. The remainder is your fault.",
+            ),
+            TagesberichtSection(
+                h="Forecast",
+                body=f"{hours_to_deadline} hours to deadline. The Hausmeister leaves at 14:01.",
+            ),
+        ]
+        cited = [s["handle"] for s in top_scraps[:5]]
+        intro = f"Na ja. Generator offline ({type(exc).__name__}). The Hausmeister continues to sweep."
+
+    payload = TagesberichtOut(
+        nr=2,
+        date=time_label,
+        intro=intro,
+        sections=sections,
+        cited=cited,
+        counts={"total": total, "top_used": len(top_scraps)},
+        generated_at=now,
+    )
+    _TAGESBERICHT_CACHE["v"] = {"payload": payload, "generated_at": now}
+    return payload
 
 
 @app.get("/wall", response_model=WallFeed)
@@ -183,6 +261,39 @@ async def submit_scrap(payload: ScrapIn):
         tags=tags,
         created_at=created,
         accepted=True,
+    )
+
+
+@app.post("/ask-the-news", response_model=AskNewsOut)
+async def ask_the_news(payload: AskIn):
+    """Stretch endpoint: cross-reference the corpus with current news via Tavily.
+    Returns 503 if TAVILY_API_KEY isn't configured."""
+    if not news.enabled():
+        raise HTTPException(status_code=503, detail="news search not configured")
+
+    qvec = llm.embed(payload.question)
+    async with db.conn() as c:
+        async with c.cursor() as cur:
+            await cur.execute(
+                """
+                SELECT id, handle, body, 1 - (embedding <=> %s) AS score
+                FROM scraps
+                WHERE embedding IS NOT NULL
+                ORDER BY embedding <=> %s
+                LIMIT 12
+                """,
+                (qvec, qvec),
+            )
+            rows = await cur.fetchall()
+
+    retrieved = [{"id": r[0], "handle": r[1], "body": r[2], "score": float(r[3])} for r in rows]
+    hits = await news.search(payload.question, max_results=5)
+    answer_text = llm.answer_with_news(payload.question, retrieved, hits)
+
+    return AskNewsOut(
+        answer=answer_text,
+        cited=[CitedScrap(id=r["id"], handle=r["handle"], body=r["body"], score=r["score"]) for r in retrieved[:5]],
+        news=[NewsHit(title=h["title"], url=h["url"]) for h in hits],
     )
 
 

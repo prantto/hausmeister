@@ -9,7 +9,7 @@ from typing import Optional
 from google import genai
 from google.genai import types
 
-from .prompts import FILTER_PROMPT, HAUSMEISTER_SYSTEM
+from .prompts import FILTER_PROMPT, HAUSMEISTER_SYSTEM, TAGESBERICHT_PROMPT
 
 _client: Optional[genai.Client] = None
 
@@ -103,3 +103,62 @@ def answer(question: str, retrieved: list[dict]) -> str:
         ),
     )
     return (res.text or "").strip()
+
+
+def answer_with_news(question: str, retrieved: list[dict], news: list[dict]) -> str:
+    """Hausmeister answer that cross-references the corpus with current news."""
+    corpus = (
+        "\n".join(f"- [{r['handle']}] {r['body']}" for r in retrieved)
+        if retrieved else "(empty)"
+    )
+    news_block = (
+        "\n".join(
+            f"- {n['title']}: {n['content'][:240]}…  ({n['url']})" for n in news
+        )
+        if news else "(no news returned)"
+    )
+    user = (
+        f"# Retrieved scraps (the corpus):\n{corpus}\n\n"
+        f"# Current news (Tavily):\n{news_block}\n\n"
+        f"# Question:\n{question}\n\n"
+        "Answer in Hausmeister voice. You may quote one short fragment from "
+        "the news. Reference scraps by handle. 2–4 sentences."
+    )
+    res = client().models.generate_content(
+        model=ANSWER_MODEL,
+        contents=user,
+        config=types.GenerateContentConfig(
+            system_instruction=HAUSMEISTER_SYSTEM,
+            temperature=0.7,
+            max_output_tokens=400,
+        ),
+    )
+    return (res.text or "").strip()
+
+
+def tagesbericht(
+    *, time_label: str, report_index: int, n_scraps: int,
+    top_scraps: list[dict], hours_to_deadline: int,
+) -> dict:
+    """Generate a Tagesbericht. Returns {intro, sections, cited}."""
+    lines = "\n".join(f"  - [{s['handle']}] {s['body']}" for s in top_scraps)
+    prompt = TAGESBERICHT_PROMPT.format(
+        time_label=time_label,
+        report_index=report_index,
+        n_scraps=n_scraps,
+        top_scraps=lines or "  (the corpus is empty)",
+        hours_to_deadline=hours_to_deadline,
+    )
+    res = client().models.generate_content(
+        model=ANSWER_MODEL,
+        contents=prompt,
+        config=types.GenerateContentConfig(
+            system_instruction=HAUSMEISTER_SYSTEM,
+            temperature=0.6,
+            max_output_tokens=900,
+            response_mime_type="application/json",
+        ),
+    )
+    raw = (res.text or "").strip()
+    raw = re.sub(r"^```(?:json)?|```$", "", raw, flags=re.MULTILINE).strip()
+    return json.loads(raw)
