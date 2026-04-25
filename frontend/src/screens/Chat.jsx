@@ -2,44 +2,85 @@ import { useEffect, useRef, useState } from "react";
 import TopBar from "../components/TopBar.jsx";
 import TabBar from "../components/TabBar.jsx";
 import { SAMPLE_CHAT } from "../data/corpus.js";
-import { ask } from "../lib/api.js";
+import { ask, transcribe } from "../lib/api.js";
+import { useVoiceRecorder } from "../hooks/useVoiceRecorder.js";
+import { speak, stop as stopTTS, ttsSupported } from "../lib/tts.js";
 
 export default function Chat() {
   const [messages, setMessages] = useState(SAMPLE_CHAT);
   const [draft, setDraft] = useState("");
   const [pending, setPending] = useState(false);
+  const [transcribing, setTranscribing] = useState(false);
   const [cited, setCited] = useState(null);
+  const [tts, setTts] = useState(() => localStorage.getItem("hm.tts") === "1");
   const scrollRef = useRef(null);
+  const recorder = useVoiceRecorder();
   const handle = localStorage.getItem("hm.handle") || "kartoffel-04";
 
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [messages, pending]);
 
-  const send = async (e) => {
-    e?.preventDefault();
-    const text = draft.trim();
-    if (!text || pending) return;
-    const t = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  useEffect(() => () => stopTTS(), []);
+
+  const toggleTts = () => {
+    const next = !tts;
+    setTts(next);
+    localStorage.setItem("hm.tts", next ? "1" : "0");
+    if (!next) stopTTS();
+  };
+
+  const handleHausReply = (body) => {
+    setMessages((m) => [...m, { who: "haus", t: stamp(), body }]);
+    if (tts) speak(body);
+  };
+
+  const stamp = () =>
+    new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+
+  const sendText = async (text) => {
+    if (!text.trim() || pending) return;
+    const t = stamp();
     setMessages((m) => [...m, { who: "you", t, body: text }]);
     setDraft("");
     setPending(true);
     try {
       const res = await ask({ handle, question: text });
       setCited(res.cited?.map((c) => c.handle) || null);
-      setMessages((m) => [...m, { who: "haus", t, body: res.answer }]);
-    } catch (err) {
-      setMessages((m) => [
-        ...m,
-        {
-          who: "haus",
-          t,
-          body:
-            "Na ja. The corpus is unreachable. Probably a CORS error. Look again. (§19)",
-        },
-      ]);
+      handleHausReply(res.answer);
+    } catch {
+      handleHausReply(
+        "Na ja. The corpus is unreachable. Probably a CORS error. Look again. (§19)"
+      );
     } finally {
       setPending(false);
+    }
+  };
+
+  const send = (e) => {
+    e?.preventDefault();
+    sendText(draft.trim());
+  };
+
+  const onVoice = async () => {
+    if (transcribing || pending) return;
+    if (recorder.recording) {
+      const blob = await recorder.stop();
+      if (!blob) return;
+      setTranscribing(true);
+      try {
+        const { text } = await transcribe(blob);
+        if (text) setDraft(text);
+      } catch (err) {
+        setMessages((m) => [
+          ...m,
+          { who: "haus", t: stamp(), body: `(transcription failed: ${err.message})` },
+        ]);
+      } finally {
+        setTranscribing(false);
+      }
+    } else {
+      await recorder.start();
     }
   };
 
@@ -98,6 +139,21 @@ export default function Chat() {
             sweeping continuously · answers in his own time
           </div>
         </div>
+        {ttsSupported && (
+          <button
+            onClick={toggleTts}
+            title={tts ? "voice: on" : "voice: off"}
+            className="hm-chip"
+            style={{
+              cursor: "pointer",
+              background: "transparent",
+              color: tts ? "var(--olive)" : "var(--muted-foreground)",
+              borderColor: tts ? "var(--olive)" : "var(--border)",
+            }}
+          >
+            {tts ? "♪ on" : "♪ off"}
+          </button>
+        )}
         <span className="hm-chip" style={{ color: "var(--olive)", borderColor: "var(--olive)" }}>
           rag
         </span>
@@ -179,17 +235,20 @@ export default function Chat() {
       >
         <button
           type="button"
-          title="Voice"
+          title={recorder.recording ? "stop & transcribe" : "record"}
+          onClick={onVoice}
+          disabled={transcribing || !recorder.supported}
           style={{
             width: 38,
             height: 38,
-            border: "1px solid var(--border)",
-            background: "transparent",
-            color: "var(--muted-foreground)",
+            border:
+              "1px solid " + (recorder.recording ? "var(--stamp-red)" : "var(--border)"),
+            background: recorder.recording ? "var(--stamp-red)" : "transparent",
+            color: recorder.recording ? "var(--bone)" : "var(--muted-foreground)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            cursor: "pointer",
+            cursor: recorder.supported ? "pointer" : "not-allowed",
             padding: 0,
             borderRadius: 2,
           }}
@@ -206,8 +265,15 @@ export default function Chat() {
         </button>
         <input
           className="hm-field"
-          placeholder="ask him anything…"
+          placeholder={
+            recorder.recording
+              ? `● recording · ${recorder.seconds}s — tap mic to stop`
+              : transcribing
+              ? "transcribing…"
+              : "ask him anything…"
+          }
           value={draft}
+          disabled={recorder.recording || transcribing}
           onChange={(e) => setDraft(e.target.value)}
           style={{ flex: 1 }}
         />

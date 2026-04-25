@@ -1,29 +1,20 @@
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import TopBar from "../components/TopBar.jsx";
 import TabBar from "../components/TabBar.jsx";
 import { VOICE_WAVES } from "../data/corpus.js";
-import { submitScrap } from "../lib/api.js";
+import { submitScrap, transcribe } from "../lib/api.js";
+import { useVoiceRecorder } from "../hooks/useVoiceRecorder.js";
 
 const MAX = 240;
 
 export default function Submit() {
   const [text, setText] = useState("");
-  const [recording, setRecording] = useState(false);
-  const [seconds, setSeconds] = useState(0);
-  const [status, setStatus] = useState(null); // { kind: 'ok'|'rejected'|'error', score?, reason? }
+  const [transcribing, setTranscribing] = useState(false);
+  const [lastKind, setLastKind] = useState("text"); // 'text' | 'voice'
+  const [status, setStatus] = useState(null);
   const [busy, setBusy] = useState(false);
-  const tickRef = useRef(null);
+  const recorder = useVoiceRecorder();
   const handle = localStorage.getItem("hm.handle") || "kartoffel-04";
-
-  useEffect(() => {
-    if (recording) {
-      tickRef.current = setInterval(() => setSeconds((s) => s + 1), 1000);
-    } else {
-      clearInterval(tickRef.current);
-      setSeconds(0);
-    }
-    return () => clearInterval(tickRef.current);
-  }, [recording]);
 
   const submit = async (e) => {
     e?.preventDefault();
@@ -32,13 +23,13 @@ export default function Submit() {
     setBusy(true);
     setStatus(null);
     try {
-      const res = await submitScrap({ handle, body, kind: recording ? "voice" : "text" });
+      const res = await submitScrap({ handle, body, kind: lastKind });
       if (!res.accepted) {
         setStatus({ kind: "rejected", reason: res.safety_reason || "rejected" });
       } else {
         setStatus({ kind: "ok", score: res.funny_score });
         setText("");
-        setRecording(false);
+        setLastKind("text");
       }
     } catch (err) {
       setStatus({ kind: "error", reason: err.message });
@@ -48,8 +39,31 @@ export default function Submit() {
     }
   };
 
-  const ss = String(seconds % 60).padStart(2, "0");
-  const mm = String(Math.floor(seconds / 60)).padStart(2, "0");
+  const onVoice = async () => {
+    if (transcribing || busy) return;
+    if (recorder.recording) {
+      const blob = await recorder.stop();
+      if (!blob) return;
+      setTranscribing(true);
+      try {
+        const { text: transcript } = await transcribe(blob);
+        if (transcript) {
+          setText(transcript.slice(0, MAX));
+          setLastKind("voice");
+        }
+      } catch (err) {
+        setStatus({ kind: "error", reason: err.message });
+        setTimeout(() => setStatus(null), 3000);
+      } finally {
+        setTranscribing(false);
+      }
+    } else {
+      await recorder.start();
+    }
+  };
+
+  const ss = String(recorder.seconds % 60).padStart(2, "0");
+  const mm = String(Math.floor(recorder.seconds / 60)).padStart(2, "0");
 
   return (
     <div
@@ -101,7 +115,7 @@ export default function Submit() {
             display: "flex",
           }}
         >
-          {recording ? (
+          {recorder.recording ? (
             <div style={{ display: "flex", flexDirection: "column", flex: 1, justifyContent: "space-between" }}>
               <div className="hm-stamp-label" style={{ color: "var(--stamp-red)" }}>
                 ● recording · {mm}:{ss}
@@ -114,20 +128,38 @@ export default function Submit() {
                       width: 3,
                       height: Math.max(4, h * 50) + "px",
                       background: "var(--olive)",
+                      animation: `hm-bar ${0.6 + (i % 5) * 0.1}s ease-in-out ${i * 0.04}s infinite alternate`,
                     }}
                   />
                 ))}
               </div>
               <div style={{ fontSize: 12, color: "var(--muted-foreground)", fontStyle: "italic" }}>
-                listening…
+                listening… tap mic to stop & transcribe
               </div>
+            </div>
+          ) : transcribing ? (
+            <div
+              style={{
+                flex: 1,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: "var(--muted-foreground)",
+                fontStyle: "italic",
+                fontSize: 13,
+              }}
+            >
+              transcribing…
             </div>
           ) : (
             <textarea
               autoFocus
               value={text}
               maxLength={MAX}
-              onChange={(e) => setText(e.target.value)}
+              onChange={(e) => {
+                setText(e.target.value);
+                if (lastKind !== "text") setLastKind("text");
+              }}
               placeholder="team next to us has been arguing about postgres vs supabase for ninety minutes…"
               style={{
                 flex: 1,
@@ -148,15 +180,17 @@ export default function Submit() {
         <div style={{ display: "flex", alignItems: "center", marginTop: 12, gap: 10 }}>
           <button
             type="button"
-            title="Voice toggle"
-            onClick={() => setRecording((r) => !r)}
+            title={recorder.recording ? "stop & transcribe" : "record"}
+            onClick={onVoice}
+            disabled={transcribing || !recorder.supported}
             style={{
               width: 42,
               height: 42,
-              border: "1px solid " + (recording ? "var(--stamp-red)" : "var(--border)"),
-              background: recording ? "var(--stamp-red)" : "transparent",
-              color: recording ? "var(--bone)" : "var(--muted-foreground)",
-              cursor: "pointer",
+              border:
+                "1px solid " + (recorder.recording ? "var(--stamp-red)" : "var(--border)"),
+              background: recorder.recording ? "var(--stamp-red)" : "transparent",
+              color: recorder.recording ? "var(--bone)" : "var(--muted-foreground)",
+              cursor: recorder.supported ? "pointer" : "not-allowed",
               padding: 0,
               borderRadius: 2,
               display: "flex",

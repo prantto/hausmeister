@@ -8,7 +8,7 @@ from contextlib import asynccontextmanager
 from uuid import UUID
 
 from dotenv import load_dotenv
-from fastapi import Depends, FastAPI, Header, HTTPException, status
+from fastapi import Depends, FastAPI, File, Header, HTTPException, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
 
 from . import db, llm
@@ -54,6 +54,17 @@ def require_admin(x_admin_password: str = Header(default="")) -> None:
 @app.get("/health")
 async def health():
     return {"ok": True}
+
+
+@app.post("/transcribe")
+async def transcribe(file: UploadFile = File(...)):
+    audio = await file.read()
+    if not audio:
+        raise HTTPException(status_code=400, detail="empty audio")
+    if len(audio) > 8 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="audio too large")
+    text = llm.transcribe(audio, file.content_type or "audio/webm")
+    return {"text": text}
 
 
 @app.get("/wall", response_model=WallFeed)

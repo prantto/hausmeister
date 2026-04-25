@@ -65,6 +65,22 @@ def filter_scrap(text: str) -> dict:
         }
 
 
+def transcribe(audio: bytes, mime_type: str = "audio/webm") -> str:
+    """Transcribe a short audio clip to text. Gemini handles audio natively
+    so we skip a separate STT vendor for now."""
+    part = types.Part.from_bytes(data=audio, mime_type=mime_type)
+    res = client().models.generate_content(
+        model=FILTER_MODEL,
+        contents=[
+            "Transcribe this audio verbatim into plain text. "
+            "Respond with only the transcript, no quotes, no commentary.",
+            part,
+        ],
+        config=types.GenerateContentConfig(temperature=0.0, max_output_tokens=400),
+    )
+    return (res.text or "").strip()
+
+
 def answer(question: str, retrieved: list[dict]) -> str:
     """Generate the Hausmeister's reply using retrieved scraps as context."""
     if retrieved:

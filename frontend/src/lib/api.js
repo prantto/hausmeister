@@ -43,3 +43,15 @@ export async function adminDelete(password, id) {
     headers: { "X-Admin-Password": password },
   });
 }
+
+export async function transcribe(blob) {
+  const fd = new FormData();
+  const ext = (blob.type || "audio/webm").split("/")[1].split(";")[0] || "webm";
+  fd.append("file", blob, `scrap.${ext}`);
+  const res = await fetch(`${BASE}/transcribe`, { method: "POST", body: fd });
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`/transcribe ${res.status}: ${text || res.statusText}`);
+  }
+  return res.json();
+}
