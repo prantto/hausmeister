@@ -14,12 +14,11 @@ from .prompts import FILTER_PROMPT, HAUSMEISTER_SYSTEM, TAGESBERICHT_PROMPT
 _client: Optional[genai.Client] = None
 
 EMBED_MODEL = "text-embedding-004"
-# Constraint: only Flash / Flash Lite are available. Flash carries the
-# Hausmeister voice and audio understanding; Flash Lite handles the
-# sub-second submission filter.
+# Constraint: only Flash / Flash Lite are available for Gemini. Flash carries
+# the Hausmeister voice; Flash Lite handles the sub-second submission filter.
+# All voice tasks (STT + TTS) route through Gradium — see app/voice.py.
 ANSWER_MODEL = "gemini-2.5-flash"
 FILTER_MODEL = "gemini-2.5-flash-lite"
-TRANSCRIBE_MODEL = "gemini-2.5-flash"
 EMBED_DIM = 768
 
 
@@ -67,22 +66,6 @@ def filter_scrap(text: str) -> dict:
             "tags": [],
             "redaction": None,
         }
-
-
-def transcribe(audio: bytes, mime_type: str = "audio/webm") -> str:
-    """Transcribe a short audio clip to text. Gemini handles audio natively
-    so we skip a separate STT vendor for now."""
-    part = types.Part.from_bytes(data=audio, mime_type=mime_type)
-    res = client().models.generate_content(
-        model=TRANSCRIBE_MODEL,
-        contents=[
-            "Transcribe this audio verbatim into plain text. "
-            "Respond with only the transcript, no quotes, no commentary.",
-            part,
-        ],
-        config=types.GenerateContentConfig(temperature=0.0, max_output_tokens=400),
-    )
-    return (res.text or "").strip()
 
 
 def answer(question: str, retrieved: list[dict]) -> str:

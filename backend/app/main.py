@@ -10,8 +10,10 @@ from uuid import UUID
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, File, Header, HTTPException, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import Response
+from pydantic import BaseModel, Field
 
-from . import db, llm, news
+from . import db, llm, news, voice
 from .schemas import (
     AdminScrap,
     AskIn,
@@ -67,8 +69,25 @@ async def transcribe(file: UploadFile = File(...)):
         raise HTTPException(status_code=400, detail="empty audio")
     if len(audio) > 8 * 1024 * 1024:
         raise HTTPException(status_code=413, detail="audio too large")
-    text = llm.transcribe(audio, file.content_type or "audio/webm")
+    try:
+        text = await voice.transcribe(audio, file.content_type or "audio/webm")
+    except RuntimeError as exc:
+        raise HTTPException(status_code=502, detail=str(exc))
     return {"text": text}
+
+
+class TTSIn(BaseModel):
+    text: str = Field(min_length=1, max_length=2000)
+    voice_id: str | None = None
+
+
+@app.post("/tts")
+async def tts(payload: TTSIn):
+    try:
+        audio, ctype = await voice.synthesize(payload.text, voice_id=payload.voice_id)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=502, detail=str(exc))
+    return Response(content=audio, media_type=ctype)
 
 
 _TAGESBERICHT_CACHE: dict = {}  # 5-minute LLM cache so repeated wall pulls are cheap

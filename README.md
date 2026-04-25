@@ -35,6 +35,8 @@ fail.
 
 ```bash
 export GEMINI_API_KEY=...
+export GRADIUM_API_KEY=...        # voice in + out
+export GRADIUM_VOICE_ID=...       # pick from your Gradium voice library
 export ADMIN_PASSWORD=change-me   # for /admin
 export TAVILY_API_KEY=...         # optional, enables /ask-the-news
 
@@ -84,7 +86,8 @@ Override the API base with `VITE_API_URL` (see
 |--------|--------------------------|------|
 | POST   | `/scrap`                 | Run safety+funny filter, embed, store. Returns `accepted: false` for unsafe scraps (not stored, only counted). |
 | POST   | `/ask`                   | Embed question, retrieve top-20 by cosine, ask Gemini 2.5 Pro. Returns answer + cited handles. |
-| POST   | `/transcribe`            | Multipart audio → transcript via Gemini 2.5 Flash. |
+| POST   | `/transcribe`            | Multipart audio → transcript via Gradium STT (WebSocket). |
+| POST   | `/tts`                   | `{text, voice_id?}` → WAV bytes from Gradium TTS. |
 | GET    | `/wall?limit=&min_score=`| Top scraps by score + corpus counts. |
 | GET    | `/tagesbericht?refresh=` | Generated daily report. 5-minute LLM cache; `?refresh=true` busts it. |
 | GET    | `/admin/scraps`          | Recent scraps. Header: `X-Admin-Password`. |
@@ -96,15 +99,18 @@ Override the API base with `VITE_API_URL` (see
 
 ## Voice
 
-- **Input:** browser `MediaRecorder` (webm/opus) → `POST /transcribe` →
-  Gemini 2.5 Flash transcribes natively.
-- **Output:** browser `speechSynthesis` with a German voice if
-  available. Toggle ♪ in the chat header (off by default; persisted).
+All voice tasks route through **Gradium** (sponsor constraint).
 
-SPEC.md mentions Gradium for STT — the pipeline above is a
-zero-dependency stand-in. To swap in a real Gradium client, replace
-the body of `llm.transcribe()` in
-[`backend/app/llm.py`](backend/app/llm.py).
+- **Input:** browser `MediaRecorder` records webm/opus → `POST /transcribe`
+  → server transcodes to 24 kHz mono WAV via ffmpeg → streams over the
+  Gradium ASR WebSocket (`wss://api.gradium.ai/api/speech/asr`) → returns
+  the joined transcript.
+- **Output:** chat composer ♪ toggle calls `POST /tts` → server hits
+  Gradium TTS (`/api/post/speech/tts`) with the configured `voice_id`
+  → browser plays the returned WAV. One in-flight utterance at a time.
+
+Set `GRADIUM_API_KEY` and `GRADIUM_VOICE_ID`. The Docker image installs
+ffmpeg automatically.
 
 ---
 
@@ -113,8 +119,9 @@ the body of `llm.transcribe()` in
 Constrained to Flash / Flash Lite:
 
 - **Gemini 2.5 Flash** — `/ask`, `/ask-the-news`, `/tagesbericht`
-  (the Hausmeister voice) and `/transcribe` (audio understanding).
+  (the Hausmeister voice).
 - **Gemini 2.5 Flash Lite** — submission safety+funny filter, for
   sub-second feedback on `/scrap`.
+- **Gradium STT + TTS** — all voice tasks (`/transcribe`, `/tts`).
 - **text-embedding-004** — 768-dim corpus embeddings, ivfflat cosine
   index.

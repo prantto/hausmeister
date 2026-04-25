@@ -1,40 +1,49 @@
-// Browser speechSynthesis wrapper. Tries to pick a German-flavored voice so
-// the Hausmeister sounds the part; falls back to whatever the platform has.
+// Gradium-backed playback. Calls the backend /tts endpoint, plays the
+// returned audio blob through a single in-flight Audio element so the
+// Hausmeister never talks over himself.
 
-let cachedVoice = null;
+import { tts as fetchTTS } from "./api.js";
 
-function pickVoice() {
-  if (cachedVoice) return cachedVoice;
-  if (typeof window === "undefined" || !window.speechSynthesis) return null;
-  const voices = window.speechSynthesis.getVoices();
-  if (!voices.length) return null;
-  cachedVoice =
-    voices.find((v) => v.lang?.toLowerCase().startsWith("de")) ||
-    voices.find((v) => /(en-gb|en-us)/i.test(v.lang)) ||
-    voices[0];
-  return cachedVoice;
+let currentAudio = null;
+let currentUrl = null;
+
+function release() {
+  if (currentUrl) {
+    URL.revokeObjectURL(currentUrl);
+    currentUrl = null;
+  }
+  currentAudio = null;
 }
 
-export function speak(text) {
-  if (typeof window === "undefined" || !window.speechSynthesis || !text) return;
-  // Cancel any in-flight utterance — the Hausmeister never talks over himself.
-  window.speechSynthesis.cancel();
-  const u = new SpeechSynthesisUtterance(text);
-  const voice = pickVoice();
-  if (voice) {
-    u.voice = voice;
-    u.lang = voice.lang;
+export async function speak(text) {
+  if (!text) return;
+  stop();
+  try {
+    const blob = await fetchTTS(text);
+    const url = URL.createObjectURL(blob);
+    const audio = new Audio(url);
+    currentAudio = audio;
+    currentUrl = url;
+    audio.onended = release;
+    audio.onerror = release;
+    await audio.play();
+  } catch (err) {
+    // Swallow — TTS is opt-in and shouldn't break the chat.
+    console.warn("Gradium TTS failed:", err.message || err);
+    release();
   }
-  u.rate = 0.95;
-  u.pitch = 0.85;
-  window.speechSynthesis.speak(u);
 }
 
 export function stop() {
-  if (typeof window !== "undefined" && window.speechSynthesis) {
-    window.speechSynthesis.cancel();
+  if (currentAudio) {
+    try {
+      currentAudio.pause();
+      currentAudio.currentTime = 0;
+    } catch {}
   }
+  release();
 }
 
-export const ttsSupported =
-  typeof window !== "undefined" && !!window.speechSynthesis;
+// Server-backed, so always available — the runtime check is now whether
+// the user opted in via the chat ♪ toggle.
+export const ttsSupported = true;

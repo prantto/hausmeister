@@ -3,7 +3,7 @@
 // dev server. All callers should treat backend failures as soft — the UI
 // has stub data to fall back on so the demo never goes black.
 
-const BASE = (import.meta.env.VITE_API_URL || "http://localhost:8080").replace(/\/$/, "");
+export const BASE = (import.meta.env.VITE_API_URL || "http://localhost:8080").replace(/\/$/, "");
 
 async function request(method, path, { body, headers } = {}) {
   const init = { method, headers: { ...(headers || {}) } };
@@ -58,4 +58,17 @@ export async function transcribe(blob) {
     throw new Error(`/transcribe ${res.status}: ${text || res.statusText}`);
   }
   return res.json();
+}
+
+export async function tts(text, voiceId) {
+  const res = await fetch(`${BASE}/tts`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text, voice_id: voiceId || null }),
+  });
+  if (!res.ok) {
+    const t = await res.text().catch(() => "");
+    throw new Error(`/tts ${res.status}: ${t || res.statusText}`);
+  }
+  return res.blob();
 }
