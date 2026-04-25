@@ -1,0 +1,44 @@
+{
+  "cli_version": "0.5.6",
+  "checkpoint_id": "1aba65ef0f80",
+  "strategy": "manual-commit",
+  "branch": "main",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "frontend/.gitignore",
+    "frontend/index.html",
+    "frontend/package-lock.json",
+    "frontend/package.json",
+    "frontend/src/App.jsx",
+    "frontend/src/components/PhoneShell.jsx",
+    "frontend/src/components/QRPlaceholder.jsx",
+    "frontend/src/components/TabBar.jsx",
+    "frontend/src/components/TopBar.jsx",
+    "frontend/src/data/corpus.js",
+    "frontend/src/main.jsx",
+    "frontend/src/screens/Chat.jsx",
+    "frontend/src/screens/Onboarding.jsx",
+    "frontend/src/screens/Rules.jsx",
+    "frontend/src/screens/Submit.jsx",
+    "frontend/src/screens/Tagesbericht.jsx",
+    "frontend/src/screens/Wall.jsx",
+    "frontend/src/styles/app.css",
+    "frontend/src/styles/tokens.css",
+    "frontend/vite.config.js"
+  ],
+  "sessions": [
+    {
+      "metadata": "/1a/ba65ef0f80/0/metadata.json",
+      "transcript": "/1a/ba65ef0f80/0/full.jsonl",
+      "content_hash": "/1a/ba65ef0f80/0/content_hash.txt",
+      "prompt": "/1a/ba65ef0f80/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 69,
+    "cache_creation_tokens": 170345,
+    "cache_read_tokens": 4671261,
+    "output_tokens": 54969,
+    "api_call_count": 49
+  }
+}

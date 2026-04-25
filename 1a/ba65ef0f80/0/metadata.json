@@ -1,0 +1,72 @@
+{
+  "cli_version": "0.5.6",
+  "checkpoint_id": "1aba65ef0f80",
+  "session_id": "36056f51-fe57-481d-a14a-3dabbdbac20d",
+  "strategy": "manual-commit",
+  "created_at": "2026-04-25T19:13:07.62886Z",
+  "branch": "main",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "frontend/.gitignore",
+    "frontend/index.html",
+    "frontend/package-lock.json",
+    "frontend/package.json",
+    "frontend/src/App.jsx",
+    "frontend/src/components/PhoneShell.jsx",
+    "frontend/src/components/QRPlaceholder.jsx",
+    "frontend/src/components/TabBar.jsx",
+    "frontend/src/components/TopBar.jsx",
+    "frontend/src/data/corpus.js",
+    "frontend/src/main.jsx",
+    "frontend/src/screens/Chat.jsx",
+    "frontend/src/screens/Onboarding.jsx",
+    "frontend/src/screens/Rules.jsx",
+    "frontend/src/screens/Submit.jsx",
+    "frontend/src/screens/Tagesbericht.jsx",
+    "frontend/src/screens/Wall.jsx",
+    "frontend/src/styles/app.css",
+    "frontend/src/styles/tokens.css",
+    "frontend/vite.config.js"
+  ],
+  "agent": "Claude Code",
+  "model": "",
+  "turn_id": "c4b416bdbcc8",
+  "token_usage": {
+    "input_tokens": 69,
+    "cache_creation_tokens": 170345,
+    "cache_read_tokens": 4671261,
+    "output_tokens": 54969,
+    "api_call_count": 49
+  },
+  "session_metrics": {
+    "turn_count": 1
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-04-25T19:13:07.610536Z",
+    "agent_lines": 3486,
+    "agent_removed": 0,
+    "human_added": 627,
+    "human_modified": 20,
+    "human_removed": 0,
+    "total_committed": 4133,
+    "total_lines_changed": 4133,
+    "agent_percentage": 84.34551173481732,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0
+    },
+    {
+      "checkpoint_number": 2,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 3522,
+      "agent_lines_removed": 0
+    }
+  ]
+}
