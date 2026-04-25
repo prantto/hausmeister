@@ -1,0 +1,80 @@
+/* Hausmeister — application-level layout. Mobile-first phone shell + routes. */
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body, #root {
+  margin: 0;
+  padding: 0;
+  background: var(--ink);
+  color: var(--bone);
+  min-height: 100vh;
+  font-family: "JetBrains Mono", ui-monospace, "IBM Plex Mono", "Menlo", monospace;
+  font-feature-settings: "ss01", "tnum", "calt";
+}
+
+button { font-family: inherit; }
+a { color: inherit; }
+
+/* Mobile phone shell — holds app on phone-sized routes (chat, submit, rules,
+   onboarding). On wider screens we letterbox to ~430px so the design still
+   reads as the application. */
+.hm-app-shell {
+  width: 100%;
+  max-width: 480px;
+  min-height: 100vh;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  background: var(--ink);
+  position: relative;
+}
+
+/* Status indicator strip simulating an iOS status bar — kept very subtle,
+   just a clock + some atmosphere. */
+.hm-faux-status {
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 22px;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 12px;
+  color: var(--bone);
+  letter-spacing: 0.04em;
+}
+
+.hm-blink { animation: blink 1s steps(2) infinite; }
+@keyframes blink { 50% { opacity: 0; } }
+
+.hm-screen-fill { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+
+/* Big-screen routes (/wall, /tagesbericht) take the full viewport. */
+.hm-bigscreen {
+  width: 100%;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--ink);
+  color: var(--bone);
+}
+
+/* Smaller phones — hide faux status to save vertical space */
+@media (max-width: 380px) {
+  .hm-faux-status { display: none; }
+}
+
+/* Reset link styling for tab buttons / chips */
+a.hm-reset { text-decoration: none; color: inherit; }
+
+/* Wall cell heights */
+.hm-wall-grid { display: grid; grid-template-columns: 1.25fr 1fr; }
+@media (max-width: 900px) {
+  .hm-wall-grid { grid-template-columns: 1fr; }
+  .hm-wall-grid > div { border-right: 0 !important; }
+}
+
+/* Tagesbericht two-column → single column on narrow */
+.hm-bericht-grid { display: grid; grid-template-columns: 1.4fr 1fr; gap: 40px; }
+@media (max-width: 900px) {
+  .hm-bericht-grid { grid-template-columns: 1fr; gap: 28px; }
+}

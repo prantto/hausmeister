@@ -1,0 +1,41 @@
+from datetime import datetime
+from typing import Optional
+from uuid import UUID
+
+from pydantic import BaseModel, Field
+
+
+class ScrapIn(BaseModel):
+    handle: str = Field(min_length=1, max_length=64)
+    body: str = Field(min_length=1, max_length=240)
+    kind: str = Field(default="text", pattern="^(text|voice)$")
+
+
+class ScrapOut(BaseModel):
+    id: UUID
+    handle: str
+    body: str
+    kind: str
+    funny_score: Optional[int] = None
+    funny_reason: Optional[str] = None
+    tags: list[str] = []
+    created_at: datetime
+    accepted: bool = True
+    safety_reason: Optional[str] = None
+
+
+class AskIn(BaseModel):
+    handle: str = Field(min_length=1, max_length=64)
+    question: str = Field(min_length=1, max_length=500)
+
+
+class CitedScrap(BaseModel):
+    id: UUID
+    handle: str
+    body: str
+    score: float
+
+
+class AskOut(BaseModel):
+    answer: str
+    cited: list[CitedScrap]

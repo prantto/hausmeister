@@ -1,0 +1,267 @@
+/* HAUSMEISTER — design system tokens.
+   Authored in OKLCH per design-system.md. Dark mode only.
+   Ink = green-tinted near-black ground. Bone = warm off-white text.
+*/
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700;800&family=Space+Grotesk:wght@400;500;700&display=swap');
+
+:root {
+  /* core palette */
+  --ink:          oklch(0.16 0.012 110);
+  --bone:         oklch(0.94 0.025 95);
+  --olive:        oklch(0.62 0.13 115);
+  --olive-deep:   oklch(0.42 0.10 118);
+  --yellow-faded: oklch(0.82 0.14 92);
+  --stamp-red:    oklch(0.55 0.22 28);
+
+  /* surfaces & text */
+  --background:        var(--ink);
+  --foreground:        var(--bone);
+  --card:              oklch(0.20 0.014 110);
+  --popover:           oklch(0.18 0.012 110);
+  --muted:             oklch(0.24 0.012 110);
+  --muted-foreground:  oklch(0.66 0.02 100);
+  --border:            oklch(0.32 0.02 110);
+  --input:             oklch(0.28 0.015 110);
+  --ring:              var(--olive);
+
+  /* legacy aliases used by existing screens */
+  --paper:    var(--ink);
+  --paper-2:  var(--card);
+  --paper-3:  var(--muted);
+  --concrete: var(--border);
+  --ink-2:    var(--muted-foreground);
+  --ink-3:    oklch(0.50 0.02 100);
+  --sticker:  var(--yellow-faded);
+  --sticker-2: var(--olive-deep);
+
+  --radius: 0.125rem;
+
+  /* texture */
+  --grunge:
+    radial-gradient(circle at 20% 30%, oklch(0.62 0.13 115 / 0.06) 0px, transparent 2px),
+    radial-gradient(circle at 80% 70%, oklch(0.82 0.14 92 / 0.05) 0px, transparent 2px),
+    radial-gradient(circle at 60% 20%, oklch(0.94 0.025 95 / 0.04) 0px, transparent 1px);
+}
+
+/* mono-first type stack */
+.hm-sans, .hm-mono {
+  font-family: "JetBrains Mono", ui-monospace, "IBM Plex Mono", "Menlo", monospace;
+  font-feature-settings: "ss01", "tnum", "calt";
+}
+.hm-display {
+  font-family: "JetBrains Mono", ui-monospace, "IBM Plex Mono", "Menlo", monospace;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  text-transform: none;
+}
+.hm-stamp-label {
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-weight: 700;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+/* "Aushang" stamp — rotated bordered chip */
+.hm-stamp {
+  border: 2px solid currentColor;
+  padding: 4px 10px;
+  transform: rotate(-2deg);
+  display: inline-block;
+  font-family: "JetBrains Mono", monospace;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-weight: 700;
+  font-size: 10px;
+  color: var(--yellow-faded);
+}
+.hm-stamp.red { color: var(--stamp-red); }
+
+/* Aushang frame — yellow-faded 2px border with overlay label */
+.hm-aushang-frame {
+  position: relative;
+  border: 2px solid var(--yellow-faded);
+  background: var(--card);
+  padding: 18px 18px 14px;
+}
+.hm-aushang-frame > .hm-aushang-label {
+  position: absolute;
+  top: -7px; left: 14px;
+  background: var(--ink);
+  padding: 0 8px;
+  color: var(--yellow-faded);
+  font-family: "JetBrains Mono", monospace;
+  font-weight: 700;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+/* small inline aushang badge (no frame) */
+.hm-aushang {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border: 1.5px solid var(--yellow-faded);
+  color: var(--yellow-faded);
+  font-family: "JetBrains Mono", monospace;
+  font-weight: 700;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.hm-rule { border: 0; border-top: 1px solid var(--border); margin: 0; }
+.hm-rule-thick { border-top-width: 2px; border-top-color: var(--olive); }
+
+/* form field — bone underline */
+.hm-field {
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  background: transparent;
+  font-family: inherit;
+  padding: 8px 2px;
+  outline: none;
+  width: 100%;
+  color: var(--foreground);
+  font-size: 13px;
+}
+.hm-field:focus { border-bottom-color: var(--olive); }
+.hm-field::placeholder { color: var(--muted-foreground); }
+
+/* primary CTA — square olive box, hover swaps to yellow */
+.hm-btn {
+  font-family: "JetBrains Mono", monospace;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  font-size: 12px;
+  padding: 14px 20px;
+  border: 2px solid var(--border);
+  background: transparent;
+  color: var(--foreground);
+  cursor: pointer;
+  border-radius: var(--radius);
+  transition: background 120ms, color 120ms, border-color 120ms;
+  display: inline-flex; align-items: center; gap: 12px;
+}
+.hm-btn:hover { background: var(--muted); }
+.hm-btn-primary {
+  background: var(--olive);
+  border-color: var(--olive);
+  color: var(--ink);
+}
+.hm-btn-primary:hover {
+  background: var(--yellow-faded);
+  border-color: var(--yellow-faded);
+}
+.hm-btn-primary .arrow { transition: transform 160ms; }
+.hm-btn-primary:hover .arrow { transform: translateX(4px); }
+.hm-btn-danger {
+  background: var(--stamp-red);
+  border-color: var(--stamp-red);
+  color: var(--bone);
+}
+
+/* tag chip — bordered, mono */
+.hm-chip {
+  display: inline-block;
+  padding: 3px 8px;
+  border: 1px solid var(--border);
+  font-family: "JetBrains Mono", monospace;
+  font-size: 10px;
+  letter-spacing: 0.02em;
+  background: transparent;
+  color: var(--muted-foreground);
+}
+
+/* status dot with flicker */
+.hm-dot {
+  width: 8px; height: 8px;
+  background: var(--olive);
+  display: inline-block;
+  animation: hm-flicker 4s ease-in-out infinite;
+}
+@keyframes hm-flicker {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.85; }
+}
+
+/* status bar — thin top strip */
+.hm-statusbar {
+  background: transparent;
+  color: var(--muted-foreground);
+  border-bottom: 1px solid var(--border);
+  font-family: "JetBrains Mono", monospace;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  padding: 8px 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* scrollbar */
+.hm-scroll::-webkit-scrollbar { width: 8px; height: 8px; }
+.hm-scroll::-webkit-scrollbar-thumb { background: var(--border); }
+.hm-scroll::-webkit-scrollbar-track { background: transparent; }
+.hm-scroll { scrollbar-color: var(--border) transparent; scrollbar-width: thin; }
+
+.hm-screen { width: 100%; height: 100%; overflow: hidden; }
+
+/* helpers */
+.hm-text-olive { color: var(--olive); }
+.hm-text-yellow { color: var(--yellow-faded); }
+.hm-text-bone { color: var(--bone); }
+.hm-text-muted { color: var(--muted-foreground); }
+.hm-underline { text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: 4px; }
+
+/* ticker */
+@keyframes hm-ticker { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }
+.hm-ticker-track { display: inline-flex; animation: hm-ticker 40s linear infinite; }
+
+/* hero scanline */
+.hm-scanline { position: relative; }
+.hm-scanline::before {
+  content: "";
+  position: absolute; inset: 0;
+  background: repeating-linear-gradient(
+    180deg, transparent 0, transparent 2px,
+    oklch(0 0 0 / 0.18) 2px, oklch(0 0 0 / 0.18) 3px
+  );
+  pointer-events: none; mix-blend-mode: multiply;
+}
+
+/* offset-shadow card (QR / portrait) */
+.hm-shadow-card {
+  position: relative;
+  background: var(--bone);
+  color: var(--ink);
+  padding: 14px;
+  box-shadow: 8px 8px 0 0 var(--olive-deep);
+  transform: rotate(1.5deg);
+}
+
+/* warning band (diagonal) */
+.hm-warning-band {
+  background: repeating-linear-gradient(
+    -45deg,
+    var(--yellow-faded) 0 14px,
+    var(--ink) 14px 28px
+  );
+  height: 6px;
+}
+
+/* paper texture for body */
+body.hm-paper {
+  background-color: var(--ink);
+  color: var(--bone);
+  background-image:
+    var(--grunge),
+    repeating-linear-gradient(
+      0deg, transparent 0px, transparent 3px,
+      oklch(0 0 0 / 0.04) 3px, oklch(0 0 0 / 0.04) 4px
+    );
+  background-attachment: fixed;
+}
