@@ -1,0 +1,42 @@
+<ide_opened_file>The user opened the file /Users/tomprantz/Library/CloudStorage/GoogleDrive-tom.prantz@ukanso.com/Shared drives/Hacka/hausmeister/SPEC.md in the IDE. This may or may not be related to the current task.</ide_opened_file>
+look into spec and here is the design. applications is mainly in english only the funny german words. Fetch this design file, read its readme, and implement the relevant aspects of the design. https://api.anthropic.com/v1/design/h/9ri_zFtHZV9SbUBhRLLAjQ?open_file=Hausmeister.html
+Implement: Hausmeister.html
+
+---
+
+continue and commit and push
+
+---
+
+push not nessary yet
+
+---
+
+continue
+
+---
+
+continue
+
+---
+
+continue
+
+---
+
+we can only use flash and flash lite. can you change to it
+
+---
+
+we need to use gradium for all voice tasks
+
+---
+
+git remote add origin git@github.com:prantto/hausmeister.git
+git branch -M main
+git push -u origin main
+
+---
+
+Side note for phase 2 (LiveKit + ai-coustics SDK for the noisy-environment voice agent): that's a real architecture shift from the current "tap-to-record → upload → transcribe" loop to a real-time LiveKit room with the browser publishing ai-coustics-denoised audio and a backend voice agent (Gradium STT → Gemini → Gradium TTS) joining as a second participant. Want me to draft that as the next milestone after dispatch is sorted?
+continue
