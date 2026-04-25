@@ -8,11 +8,20 @@ from contextlib import asynccontextmanager
 from uuid import UUID
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 
 from . import db, llm
-from .schemas import AskIn, AskOut, CitedScrap, ScrapIn, ScrapOut
+from .schemas import (
+    AdminScrap,
+    AskIn,
+    AskOut,
+    CitedScrap,
+    ScrapIn,
+    ScrapOut,
+    WallFeed,
+    WallScrap,
+)
 
 load_dotenv()
 
@@ -36,9 +45,74 @@ app.add_middleware(
 )
 
 
+def require_admin(x_admin_password: str = Header(default="")) -> None:
+    expected = os.environ.get("ADMIN_PASSWORD")
+    if not expected or x_admin_password != expected:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="bad password")
+
+
 @app.get("/health")
 async def health():
     return {"ok": True}
+
+
+@app.get("/wall", response_model=WallFeed)
+async def wall(limit: int = 8, min_score: int = 6):
+    async with db.conn() as c:
+        async with c.cursor() as cur:
+            await cur.execute(
+                """
+                SELECT id, handle, body, funny_score, created_at
+                FROM scraps
+                WHERE funny_score >= %s
+                ORDER BY created_at DESC
+                LIMIT %s
+                """,
+                (min_score, limit),
+            )
+            rows = await cur.fetchall()
+            await cur.execute("SELECT count(*) FROM scraps")
+            (total,) = await cur.fetchone()
+            await cur.execute("SELECT count(*) FROM scraps WHERE funny_score >= %s", (min_score,))
+            (on_wall,) = await cur.fetchone()
+
+    scraps = [WallScrap(id=r[0], handle=r[1], body=r[2], funny_score=r[3] or 0, created_at=r[4]) for r in rows]
+    return WallFeed(scraps=scraps, counts={"total": total, "on_wall": on_wall})
+
+
+@app.get("/admin/scraps", response_model=list[AdminScrap], dependencies=[Depends(require_admin)])
+async def admin_list(limit: int = 100):
+    async with db.conn() as c:
+        async with c.cursor() as cur:
+            await cur.execute(
+                """
+                SELECT id, handle, body, kind, funny_score, tags, created_at
+                FROM scraps
+                ORDER BY created_at DESC
+                LIMIT %s
+                """,
+                (limit,),
+            )
+            rows = await cur.fetchall()
+    return [
+        AdminScrap(
+            id=r[0], handle=r[1], body=r[2], kind=r[3],
+            funny_score=r[4], tags=list(r[5] or []), created_at=r[6],
+        )
+        for r in rows
+    ]
+
+
+@app.delete("/admin/scraps/{scrap_id}", dependencies=[Depends(require_admin)])
+async def admin_delete(scrap_id: UUID):
+    async with db.conn() as c:
+        async with c.cursor() as cur:
+            await cur.execute("DELETE FROM scraps WHERE id = %s", (scrap_id,))
+            deleted = cur.rowcount
+        await c.commit()
+    if not deleted:
+        raise HTTPException(status_code=404, detail="not found")
+    return {"deleted": str(scrap_id)}
 
 
 @app.post("/scrap", response_model=ScrapOut)

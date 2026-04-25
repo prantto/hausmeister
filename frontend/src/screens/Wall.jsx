@@ -1,17 +1,56 @@
+import { useEffect, useState } from "react";
 import QRPlaceholder from "../components/QRPlaceholder.jsx";
 import { WALL_FEED } from "../data/corpus.js";
+import { fetchWall } from "../lib/api.js";
 
-const TICKER = [
-  "247 scraps logged",
-  "31 purged for safety",
-  "19 marked langweilig",
-  "next Tagesbericht 14:00",
-  "T-22:13 to submission",
-  "Hausmeister leaves SUN 14:01",
-];
+const FALLBACK = WALL_FEED.filter((w) => w.type === "scrap").map((s, i) => ({
+  id: `seed-${i}`,
+  handle: s.handle,
+  body: s.body,
+  funny_score: s.score,
+  created_at: new Date().toISOString(),
+  _t: s.t,
+}));
+const FALLBACK_COUNTS = { total: 247, on_wall: 61 };
 
 export default function Wall() {
-  const scraps = WALL_FEED.filter((w) => w.type === "scrap");
+  const [scraps, setScraps] = useState(FALLBACK);
+  const [counts, setCounts] = useState(FALLBACK_COUNTS);
+  const [live, setLive] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    const tick = async () => {
+      try {
+        const feed = await fetchWall({ limit: 8, minScore: 6 });
+        if (cancelled) return;
+        if (feed.scraps?.length) {
+          setScraps(feed.scraps);
+          setLive(true);
+        }
+        if (feed.counts) setCounts(feed.counts);
+      } catch {
+        // backend offline — keep showing the seed feed
+      }
+    };
+    tick();
+    const id = setInterval(tick, 8000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, []);
+
+  const ticker = [
+    `${counts.total} scraps logged`,
+    `${counts.on_wall} on the wall`,
+    "next Tagesbericht 14:00",
+    "Hausmeister leaves SUN 14:01",
+    live ? "● live · Komposthaufen" : "○ standby · seed feed",
+  ];
+
+  const fmtTime = (s) =>
+    s._t ?? new Date(s.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
   return (
     <div className="hm-bigscreen hm-sans">
@@ -48,7 +87,7 @@ export default function Wall() {
             className="hm-stamp-label"
             style={{ color: "var(--muted-foreground)", fontSize: 11 }}
           >
-            247 logged · 61 on wall
+            {counts.total} logged · {counts.on_wall} on wall
           </span>
           <span className="hm-stamp-label" style={{ color: "var(--olive)", fontSize: 12 }}>
             ● SAT 13:47
@@ -71,9 +110,9 @@ export default function Wall() {
             ☞ Incoming · live from the Komposthaufen
           </div>
           <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 10 }}>
-            {scraps.slice(0, 4).map((s, i) => (
+            {scraps.slice(0, 4).map((s) => (
               <div
-                key={i}
+                key={s.id}
                 style={{
                   background: "var(--card)",
                   border: "1px solid var(--border)",
@@ -89,14 +128,14 @@ export default function Wall() {
                     className="hm-stamp-label"
                     style={{ color: "var(--muted-foreground)" }}
                   >
-                    · SAT {s.t}
+                    · {fmtTime(s)}
                   </span>
                   <span style={{ flex: 1 }} />
                   <span className="hm-stamp-label" style={{ color: "var(--muted-foreground)" }}>
                     score
                   </span>
                   <span className="hm-display" style={{ fontSize: 18, color: "var(--bone)" }}>
-                    {s.score}
+                    {s.funny_score}
                     <span style={{ color: "var(--muted-foreground)", fontSize: 12 }}>/10</span>
                   </span>
                 </div>
@@ -294,7 +333,7 @@ export default function Wall() {
             color: "var(--bone)",
           }}
         >
-          {[...TICKER, ...TICKER].map((t, i) => (
+          {[...ticker, ...ticker].map((t, i) => (
             <span
               key={i}
               style={{ display: "inline-flex", alignItems: "center", padding: "0 24px", gap: 18 }}

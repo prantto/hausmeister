@@ -39,3 +39,26 @@ class CitedScrap(BaseModel):
 class AskOut(BaseModel):
     answer: str
     cited: list[CitedScrap]
+
+
+class AdminScrap(BaseModel):
+    id: UUID
+    handle: str
+    body: str
+    kind: str
+    funny_score: Optional[int] = None
+    tags: list[str] = []
+    created_at: datetime
+
+
+class WallScrap(BaseModel):
+    id: UUID
+    handle: str
+    body: str
+    funny_score: int
+    created_at: datetime
+
+
+class WallFeed(BaseModel):
+    scraps: list[WallScrap]
+    counts: dict[str, int]
