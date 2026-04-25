@@ -108,11 +108,13 @@ the body of `llm.transcribe()` in
 
 ---
 
-## Models & costs
+## Models
 
-- **Gemini 2.5 Pro** — `/ask`, `/ask-the-news`, `/tagesbericht` (the
-  Hausmeister voice).
-- **Gemini 2.5 Flash** — submission filter and audio transcription
-  (sub-second submission feedback per SPEC.md).
+Constrained to Flash / Flash Lite:
+
+- **Gemini 2.5 Flash** — `/ask`, `/ask-the-news`, `/tagesbericht`
+  (the Hausmeister voice) and `/transcribe` (audio understanding).
+- **Gemini 2.5 Flash Lite** — submission safety+funny filter, for
+  sub-second feedback on `/scrap`.
 - **text-embedding-004** — 768-dim corpus embeddings, ivfflat cosine
   index.
