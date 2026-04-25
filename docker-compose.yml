@@ -29,8 +29,28 @@ services:
       GRADIUM_API_KEY: ${GRADIUM_API_KEY:-}
       GRADIUM_VOICE_ID: ${GRADIUM_VOICE_ID:-default}
       TAVILY_API_KEY: ${TAVILY_API_KEY:-}
+      LIVEKIT_URL: ${LIVEKIT_URL:-}
+      LIVEKIT_API_KEY: ${LIVEKIT_API_KEY:-}
+      LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET:-}
     ports:
       - "8080:8080"
+
+  agent:
+    build:
+      context: ./backend
+      dockerfile: agent/Dockerfile
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://hausmeister:hausmeister@db:5432/hausmeister
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GRADIUM_API_KEY: ${GRADIUM_API_KEY:-}
+      GRADIUM_VOICE_ID: ${GRADIUM_VOICE_ID:-default}
+      LIVEKIT_URL: ${LIVEKIT_URL:-}
+      LIVEKIT_API_KEY: ${LIVEKIT_API_KEY:-}
+      LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET:-}
+    restart: unless-stopped
 
 volumes:
   hausmeister_pg:

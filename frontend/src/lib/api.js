@@ -60,6 +60,10 @@ export async function transcribe(blob) {
   return res.json();
 }
 
+export async function fetchVoiceToken(handle) {
+  return request("POST", "/voice/token", { body: { handle } });
+}
+
 export async function tts(text, voiceId) {
   const res = await fetch(`${BASE}/tts`, {
     method: "POST",

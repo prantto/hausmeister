@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import TopBar from "../components/TopBar.jsx";
 import TabBar from "../components/TabBar.jsx";
 import { SAMPLE_CHAT } from "../data/corpus.js";
@@ -154,6 +155,14 @@ export default function Chat() {
             {tts ? "♪ on" : "♪ off"}
           </button>
         )}
+        <Link
+          to="/talk"
+          className="hm-chip hm-reset"
+          style={{ color: "var(--yellow-faded)", borderColor: "var(--yellow-faded)" }}
+          title="Real-time conversation"
+        >
+          ● live
+        </Link>
         <span className="hm-chip" style={{ color: "var(--olive)", borderColor: "var(--olive)" }}>
           rag
         </span>

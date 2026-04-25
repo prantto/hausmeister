@@ -13,7 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
-from . import db, llm, news, voice
+from . import db, livekit_token, llm, news, voice
 from .schemas import (
     AdminScrap,
     AskIn,
@@ -88,6 +88,31 @@ async def tts(payload: TTSIn):
     except RuntimeError as exc:
         raise HTTPException(status_code=502, detail=str(exc))
     return Response(content=audio, media_type=ctype)
+
+
+class VoiceTokenIn(BaseModel):
+    handle: str = Field(min_length=1, max_length=64)
+
+
+class VoiceTokenOut(BaseModel):
+    token: str
+    url: str
+    room: str
+
+
+@app.post("/voice/token", response_model=VoiceTokenOut)
+async def voice_token(payload: VoiceTokenIn):
+    """Mint a LiveKit access token. The browser uses this to join a room;
+    the Hausmeister voice agent worker is dispatched into the same room."""
+    livekit_url = os.environ.get("LIVEKIT_URL")
+    if not livekit_url:
+        raise HTTPException(status_code=503, detail="LIVEKIT_URL not configured")
+    try:
+        room = livekit_token.room_for_handle(payload.handle)
+        token = livekit_token.mint_token(identity=payload.handle, room=room)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+    return VoiceTokenOut(token=token, url=livekit_url, room=room)
 
 
 _TAGESBERICHT_CACHE: dict = {}  # 5-minute LLM cache so repeated wall pulls are cheap

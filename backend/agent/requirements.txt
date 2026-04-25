@@ -1,0 +1,10 @@
+# LiveKit voice agent worker. Kept separate from the API container so
+# its heavier deps (audio plugins, models) don't bloat the API image.
+livekit-agents[gradium,google]~=1.3
+livekit-plugins-ai-coustics~=1.3
+livekit-plugins-silero~=1.3
+psycopg[binary]==3.2.3
+psycopg-pool==3.2.3
+pgvector==0.3.6
+google-genai==0.3.0
+python-dotenv==1.0.1

@@ -7,6 +7,7 @@ import Rules from "./screens/Rules.jsx";
 import Wall from "./screens/Wall.jsx";
 import Tagesbericht from "./screens/Tagesbericht.jsx";
 import Admin from "./screens/Admin.jsx";
+import Talk from "./screens/Talk.jsx";
 
 function PhoneRoute({ children }) {
   return <PhoneShell>{children}</PhoneShell>;
@@ -28,6 +29,7 @@ export default function App() {
       <Route path="/wall"         element={<Wall />} />
       <Route path="/tagesbericht" element={<Tagesbericht />} />
       <Route path="/admin"        element={<Admin />} />
+      <Route path="/talk"         element={<PhoneRoute><Talk /></PhoneRoute>} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
