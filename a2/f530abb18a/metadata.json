@@ -1,0 +1,63 @@
+{
+  "cli_version": "0.5.6",
+  "checkpoint_id": "a2f530abb18a",
+  "strategy": "manual-commit",
+  "branch": "main",
+  "checkpoints_count": 81,
+  "files_touched": [
+    ".env.example",
+    ".gitignore",
+    "README.md",
+    "backend/.env.example",
+    "backend/Dockerfile",
+    "backend/agent/Dockerfile",
+    "backend/agent/__init__.py",
+    "backend/agent/main.py",
+    "backend/agent/requirements.txt",
+    "backend/agent/retrieval.py",
+    "backend/app/livekit_token.py",
+    "backend/app/llm.py",
+    "backend/app/main.py",
+    "backend/app/prompts.py",
+    "backend/app/voice.py",
+    "backend/app/voice_stream.py",
+    "backend/requirements.txt",
+    "docker-compose.yml",
+    "frontend/.env.example",
+    "frontend/index.html",
+    "frontend/package.json",
+    "frontend/public/gradbot/audio-output-worklet.js",
+    "frontend/public/gradbot/audio-processor.js",
+    "frontend/public/gradbot/decoderWorker.min.js",
+    "frontend/public/gradbot/decoderWorker.min.wasm",
+    "frontend/public/gradbot/encoderWorker.min.js",
+    "frontend/public/gradbot/opus-encoder.js",
+    "frontend/public/gradbot/synced-audio-player.js",
+    "frontend/src/App.jsx",
+    "frontend/src/components/TabBar.jsx",
+    "frontend/src/lib/aicoustics.js",
+    "frontend/src/lib/api.js",
+    "frontend/src/lib/livekit.js",
+    "frontend/src/lib/voiceStream.js",
+    "frontend/src/screens/Chat.jsx",
+    "frontend/src/screens/Onboarding.jsx",
+    "frontend/src/screens/Submit.jsx",
+    "frontend/src/screens/Talk.jsx",
+    "frontend/src/screens/Wall.jsx"
+  ],
+  "sessions": [
+    {
+      "metadata": "/a2/f530abb18a/0/metadata.json",
+      "transcript": "/a2/f530abb18a/0/full.jsonl",
+      "content_hash": "/a2/f530abb18a/0/content_hash.txt",
+      "prompt": "/a2/f530abb18a/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 1212,
+    "cache_creation_tokens": 2930824,
+    "cache_read_tokens": 68956620,
+    "output_tokens": 388318,
+    "api_call_count": 490
+  }
+}
