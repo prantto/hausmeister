@@ -1,9 +1,9 @@
 import { NavLink } from "react-router-dom";
 
 const TABS = [
-  { id: "ask",    label: "ask",    to: "/chat" },
-  { id: "submit", label: "drop",   to: "/submit" },
-  { id: "rules",  label: "regeln", to: "/rules" },
+  { id: "ask",    label: "ask",    to: "/m/chat" },
+  { id: "submit", label: "drop",   to: "/m/submit" },
+  { id: "rules",  label: "regeln", to: "/m/rules" },
 ];
 
 export default function TabBar() {

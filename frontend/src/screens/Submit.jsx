@@ -7,7 +7,7 @@ import { useVoiceRecorder } from "../hooks/useVoiceRecorder.js";
 
 const MAX = 240;
 
-export default function Submit() {
+export default function Submit({ onClose } = {}) {
   const [text, setText] = useState("");
   const [transcribing, setTranscribing] = useState(false);
   const [lastKind, setLastKind] = useState("text"); // 'text' | 'voice'
@@ -77,7 +77,14 @@ export default function Submit() {
         minHeight: 0,
       }}
     >
-      <TopBar subtitle="Drop a scrap" right={handle} />
+      {onClose ? (
+        <div style={{ padding: "10px 14px", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <span className="hm-stamp-label" style={{ color: "var(--olive)" }}>☞ drop a scrap</span>
+          <button onClick={onClose} className="hm-chip" style={{ cursor: "pointer", background: "transparent" }}>✕ close</button>
+        </div>
+      ) : (
+        <TopBar subtitle="Drop a scrap" right={handle} />
+      )}
 
       <form
         onSubmit={submit}
@@ -214,19 +221,71 @@ export default function Submit() {
           <span style={{ flex: 1 }} />
           <button type="submit" className="hm-btn hm-btn-primary" disabled={busy}>
             <span>
-              {busy
-                ? "logging…"
-                : status?.kind === "ok"
-                ? `logged · ${status.score}/10`
-                : status?.kind === "rejected"
-                ? `rejected · ${status.reason}`
-                : status?.kind === "error"
-                ? "offline"
-                : "submit"}
+              {busy ? "logging…" : status?.kind === "rejected" ? "rejected" : status?.kind === "error" ? "offline" : "submit"}
             </span>
             <span className="arrow">→</span>
           </button>
         </div>
+
+        {status?.kind === "ok" && (
+          <div
+            style={{
+              marginTop: 14,
+              border: "1px solid var(--border)",
+              background: "var(--card)",
+              padding: "12px 14px",
+            }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
+              <span style={{ fontFamily: "JetBrains Mono, monospace", fontSize: 10, color: "var(--muted-foreground)", letterSpacing: "0.08em" }}>
+                FUNNY SCORE
+              </span>
+              <span style={{
+                fontFamily: "JetBrains Mono, monospace",
+                fontSize: 13,
+                fontWeight: 700,
+                color: status.score >= 6 ? "var(--olive)" : status.score >= 4 ? "var(--bone)" : "var(--muted-foreground)",
+              }}>
+                {status.score} / 10
+              </span>
+            </div>
+            <div style={{ display: "flex", gap: 3, marginBottom: 10 }}>
+              {Array.from({ length: 10 }, (_, i) => (
+                <div
+                  key={i}
+                  style={{
+                    flex: 1,
+                    height: 6,
+                    background: i < status.score
+                      ? (status.score >= 6 ? "var(--olive)" : status.score >= 4 ? "var(--bone)" : "var(--muted-foreground)")
+                      : "var(--border)",
+                  }}
+                />
+              ))}
+            </div>
+            <div style={{ fontFamily: "JetBrains Mono, monospace", fontSize: 10, color: "var(--muted-foreground)" }}>
+              {status.score >= 6
+                ? "☞ geht auf die /wall"
+                : "☞ bleibt im Komposthaufen"}
+            </div>
+          </div>
+        )}
+
+        {status?.kind === "rejected" && (
+          <div style={{ marginTop: 14, border: "1px solid var(--stamp-red)", background: "var(--card)", padding: "10px 14px" }}>
+            <span style={{ fontFamily: "JetBrains Mono, monospace", fontSize: 10, color: "var(--stamp-red)", letterSpacing: "0.08em" }}>
+              REJECTED · {status.reason}
+            </span>
+          </div>
+        )}
+
+        {status?.kind === "error" && (
+          <div style={{ marginTop: 14, border: "1px solid var(--border)", background: "var(--card)", padding: "10px 14px" }}>
+            <span style={{ fontFamily: "JetBrains Mono, monospace", fontSize: 10, color: "var(--muted-foreground)" }}>
+              offline · {status.reason}
+            </span>
+          </div>
+        )}
 
         <div
           style={{
@@ -245,7 +304,7 @@ export default function Submit() {
         </div>
       </form>
 
-      <TabBar />
+      {!onClose && <TabBar />}
     </div>
   );
 }

@@ -24,33 +24,32 @@ services:
     environment:
       DATABASE_URL: postgresql://hausmeister:hausmeister@db:5432/hausmeister
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
-      ALLOWED_ORIGINS: http://localhost:5173,http://localhost:4173
+      PIONEER_API_KEY: ${PIONEER_API_KEY:-}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:5173,http://localhost:5174,http://localhost:4173}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-change-me}
+      # gradbot reads LLM_* envs to talk to an OpenAI-compatible endpoint.
+      # Gemini exposes one at https://generativelanguage.googleapis.com/v1beta/openai/
+      # so we point gradbot at it and reuse GEMINI_API_KEY as LLM_API_KEY.
+      LLM_BASE_URL: ${LLM_BASE_URL:-https://generativelanguage.googleapis.com/v1beta/openai/}
+      LLM_MODEL: ${LLM_MODEL:-gemini-flash-latest}
+      LLM_API_KEY: ${LLM_API_KEY:-${GEMINI_API_KEY:-}}
       GRADIUM_API_KEY: ${GRADIUM_API_KEY:-}
-      GRADIUM_VOICE_ID: ${GRADIUM_VOICE_ID:-default}
+      GRADIUM_VOICE_ID: ${GRADIUM_VOICE_ID:-}
+      # Use raw PCM end-to-end on the WS — simpler than the Opus path
+      # for first boot. Flip to 0 to fall back to OggOpus (smaller frames).
+      USE_PCM: ${USE_PCM:-1}
       TAVILY_API_KEY: ${TAVILY_API_KEY:-}
-      LIVEKIT_URL: ${LIVEKIT_URL:-}
-      LIVEKIT_API_KEY: ${LIVEKIT_API_KEY:-}
-      LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET:-}
     ports:
       - "8080:8080"
 
-  agent:
-    build:
-      context: ./backend
-      dockerfile: agent/Dockerfile
+  web:
+    build: ./frontend
     depends_on:
-      db:
-        condition: service_healthy
+      - api
     environment:
-      DATABASE_URL: postgresql://hausmeister:hausmeister@db:5432/hausmeister
-      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
-      GRADIUM_API_KEY: ${GRADIUM_API_KEY:-}
-      GRADIUM_VOICE_ID: ${GRADIUM_VOICE_ID:-default}
-      LIVEKIT_URL: ${LIVEKIT_URL:-}
-      LIVEKIT_API_KEY: ${LIVEKIT_API_KEY:-}
-      LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET:-}
-    restart: unless-stopped
+      VITE_API_URL: http://api:8080
+    ports:
+      - "3000:80"
 
 volumes:
   hausmeister_pg:

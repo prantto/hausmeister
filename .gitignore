@@ -1,3 +1,11 @@
 .DS_Store
 .claude/settings.local.json
 .entire/
+# Secrets — never commit. Subdirs have their own .gitignore, but the
+# root .env (consumed by docker-compose) needs to be ignored here too.
+.env
+.env.*
+!.env.example
+
+# Source archive for the gradbot SDK — extracted into frontend/public/gradbot/.
+gradbot-main.zip

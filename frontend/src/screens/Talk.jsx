@@ -1,31 +1,83 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import TopBar from "../components/TopBar.jsx";
-import { fetchVoiceToken } from "../lib/api.js";
-import { connectAndPublish } from "../lib/livekit.js";
+import { connect as connectVoice, fetchVoices } from "../lib/voiceStream.js";
+
+const FLAGS = { en: "🇬🇧", de: "🇩🇪", fr: "🇫🇷", es: "🇪🇸", pt: "🇵🇹" };
 
 export default function Talk() {
   const navigate = useNavigate();
   const handle = localStorage.getItem("hm.handle") || "kartoffel-04";
-  const [state, setState] = useState("idle"); // idle | connecting | live | error
+
+  const [voices, setVoices] = useState([]);
+  const [voiceId, setVoiceId] = useState(() => localStorage.getItem("hm.voiceId") || "");
+  const [language, setLanguage] = useState(() => localStorage.getItem("hm.voiceLang") || "en");
+
+  const [state, setState] = useState("idle");
   const [muted, setMuted] = useState(false);
   const [transcript, setTranscript] = useState([]);
   const [error, setError] = useState(null);
   const sessionRef = useRef(null);
 
+  useEffect(() => {
+    let cancelled = false;
+    fetchVoices()
+      .then((vs) => {
+        if (cancelled) return;
+        setVoices(vs);
+        if (!voiceId && vs.length) {
+          // Bias toward German voices for the Hausmeister persona.
+          const pick = vs.find((v) => v.language === "de") || vs[0];
+          setVoiceId(pick.voice_id);
+          setLanguage(pick.language || "en");
+          localStorage.setItem("hm.voiceId", pick.voice_id);
+          localStorage.setItem("hm.voiceLang", pick.language || "en");
+        }
+      })
+      .catch((e) => setError(`could not load voices: ${e.message}`));
+    return () => { cancelled = true; };
+    // voiceId intentionally omitted — first load only.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const selectedVoice = useMemo(
+    () => voices.find((v) => v.voice_id === voiceId) || null,
+    [voices, voiceId],
+  );
+
   const start = async () => {
+    if (!voiceId) {
+      setError("pick a voice first");
+      return;
+    }
     setError(null);
     setState("connecting");
+    setTranscript([]);
     try {
-      const t = await fetchVoiceToken(handle);
-      const session = await connectAndPublish({
-        url: t.url,
-        token: t.token,
-        onState: (s) => setState(s === "connected" ? "live" : s),
-        onTranscript: (msg) => {
-          if (msg?.text) {
-            setTranscript((prev) => [...prev, { who: msg.role || "haus", body: msg.text }]);
-          }
+      const session = await connectVoice({
+        voiceId,
+        language,
+        echoCancellation: true,
+        onState: (s) => setState((prev) => (prev === "error" ? prev : s)),
+        onTranscript: ({ role, text, turnIdx }) => {
+          setTranscript((prev) => {
+            // gradbot streams text incrementally per turn — append to the
+            // last bubble of the same role+turnIdx, otherwise start fresh.
+            const last = prev[prev.length - 1];
+            if (last && last.who === role && last.turnIdx === turnIdx) {
+              const next = prev.slice(0, -1);
+              next.push({ ...last, body: `${last.body} ${text}`.trim() });
+              return next;
+            }
+            return [...prev, { who: role, body: text, turnIdx }];
+          });
+        },
+        onEvent: (evt) => {
+          if (evt) console.debug("[voice] event:", evt);
+        },
+        onError: (msg) => {
+          setError(msg);
+          setState("error");
         },
       });
       sessionRef.current = session;
@@ -39,17 +91,35 @@ export default function Talk() {
     if (sessionRef.current) await sessionRef.current.leave();
     sessionRef.current = null;
     setState("idle");
-    setTranscript([]);
+    setMuted(false);
   };
 
   const toggleMute = () => {
     if (!sessionRef.current) return;
     const next = !muted;
-    sessionRef.current.setMicEnabled(!next);
+    sessionRef.current.setMuted(next);
     setMuted(next);
   };
 
+  const onPickVoice = (v) => {
+    setVoiceId(v.voice_id);
+    setLanguage(v.language || "en");
+    localStorage.setItem("hm.voiceId", v.voice_id);
+    localStorage.setItem("hm.voiceLang", v.language || "en");
+  };
+
   useEffect(() => () => { sessionRef.current?.leave(); }, []);
+
+  const live = state === "listening" || state === "thinking" || state === "speaking";
+  const stateLabel = {
+    idle: "ready",
+    connecting: "connecting…",
+    listening: "on duty · he is listening",
+    thinking: "thinking…",
+    speaking: "speaking…",
+    closed: "offline",
+    error: "offline",
+  }[state] || state;
 
   return (
     <div
@@ -66,7 +136,7 @@ export default function Talk() {
         subtitle="Live · noisy room ready"
         right={
           <button
-            onClick={() => navigate("/chat")}
+            onClick={() => navigate("/m/chat")}
             className="hm-chip"
             style={{ cursor: "pointer", background: "transparent" }}
           >
@@ -94,16 +164,68 @@ export default function Talk() {
         >
           Talk to <span style={{ color: "var(--olive)" }}>der Hausmeister</span>.
           <br />
-          He hears you. <br/>Even with the espresso machine.
+          He hears you. <br />Even with the espresso machine.
         </h1>
 
         <p style={{ fontSize: 12.5, color: "var(--muted-foreground)", lineHeight: 1.55, margin: 0 }}>
-          Real-time conversation over a LiveKit room. Your mic gets denoised
-          server-side via <span className="hm-text-yellow">ai-coustics</span>;
-          the Hausmeister speaks back through{" "}
-          <span className="hm-text-yellow">Gradium</span>. Mostly English with
-          the occasional German interjection.
+          Real-time conversation over a single WebSocket. Mic is denoised in the
+          browser via <span className="hm-text-yellow">ai-coustics</span>; STT
+          and TTS run on <span className="hm-text-yellow">Gradium</span> through
+          the open-source <span className="hm-text-yellow">gradbot</span>{" "}
+          multiplexer. Mostly English with the occasional German interjection.
         </p>
+
+        <div
+          style={{
+            border: "1px solid var(--border)",
+            background: "var(--card)",
+            padding: "12px 14px",
+            display: "flex",
+            flexDirection: "column",
+            gap: 10,
+          }}
+        >
+          <div
+            className="hm-stamp-label"
+            style={{ color: "var(--muted-foreground)", fontSize: 9 }}
+          >
+            ☞ voice
+          </div>
+          {voices.length === 0 ? (
+            <div style={{ fontSize: 12, color: "var(--muted-foreground)" }}>
+              loading catalog…
+            </div>
+          ) : (
+            <select
+              className="hm-field"
+              value={voiceId}
+              onChange={(e) => {
+                const v = voices.find((x) => x.voice_id === e.target.value);
+                if (v) onPickVoice(v);
+              }}
+              disabled={live || state === "connecting"}
+              style={{ width: "100%" }}
+            >
+              {voices.map((v) => {
+                const flag = FLAGS[v.language] || "🌐";
+                const label = v.name && v.name !== "unknow" ? v.name : v.voice_id;
+                const meta = [v.gender, v.country_name || v.country]
+                  .filter((x) => x && x !== "—")
+                  .join(" · ");
+                return (
+                  <option key={v.voice_id} value={v.voice_id}>
+                    {flag} {label}{meta ? ` · ${meta}` : ""}
+                  </option>
+                );
+              })}
+            </select>
+          )}
+          {selectedVoice?.description && (
+            <div style={{ fontSize: 11, color: "var(--muted-foreground)", lineHeight: 1.5 }}>
+              {selectedVoice.description}
+            </div>
+          )}
+        </div>
 
         <div
           style={{
@@ -117,26 +239,28 @@ export default function Talk() {
         >
           <span
             className="hm-dot"
-            style={{ background: state === "live" ? "var(--olive)" : "var(--muted-foreground)" }}
+            style={{ background: live ? "var(--olive)" : "var(--muted-foreground)" }}
           />
           <div style={{ flex: 1 }}>
             <div className="hm-stamp-label" style={{ color: "var(--muted-foreground)" }}>
-              {state === "idle"       && "ready"}
-              {state === "connecting" && "connecting…"}
-              {state === "live"       && "on duty · he is listening"}
-              {state === "error"      && "offline"}
+              {stateLabel}
             </div>
             <div className="hm-stamp-label" style={{ fontSize: 9, color: "var(--muted-foreground)" }}>
               handle · {handle}
             </div>
           </div>
-          {state !== "live" ? (
+          {!live && state !== "connecting" ? (
             <button
               className="hm-btn hm-btn-primary"
               onClick={start}
-              disabled={state === "connecting"}
+              disabled={!voiceId}
             >
-              <span>{state === "connecting" ? "joining…" : "join room"}</span>
+              <span>{state === "error" ? "retry" : "join"}</span>
+              <span className="arrow">→</span>
+            </button>
+          ) : state === "connecting" ? (
+            <button className="hm-btn hm-btn-primary" disabled>
+              <span>joining…</span>
               <span className="arrow">→</span>
             </button>
           ) : (
@@ -179,7 +303,7 @@ export default function Talk() {
           </div>
           {transcript.length === 0 ? (
             <div style={{ fontSize: 12, color: "var(--muted-foreground)", fontStyle: "italic" }}>
-              {state === "live" ? "(listening… speak when ready)" : "(join to begin)"}
+              {live ? "(listening… speak when ready)" : "(join to begin)"}
             </div>
           ) : (
             transcript.map((m, i) => (
@@ -200,7 +324,7 @@ export default function Talk() {
         </div>
 
         <div style={{ fontSize: 10, color: "var(--muted-foreground)", lineHeight: 1.6 }}>
-          ☞ ai-coustics denoise → Gradium STT → Gemini Flash + corpus RAG → Gradium TTS.
+          ☞ mic → ai-coustics (browser) → gradbot WS → Gradium STT → Gemini Flash + corpus tool → Gradium TTS.
         </div>
       </div>
     </div>

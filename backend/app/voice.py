@@ -67,7 +67,7 @@ async def transcribe(audio: bytes, mime_type: str = "audio/webm") -> str:
     parts: list[tuple[float, str]] = []
     headers = [("x-api-key", _api_key())]
 
-    async with websockets.connect(STT_URL, additional_headers=headers, max_size=8 * 1024 * 1024) as ws:
+    async with websockets.connect(STT_URL, extra_headers=headers, max_size=8 * 1024 * 1024) as ws:
         await ws.send(json.dumps({
             "type": "setup",
             "model_name": os.environ.get("GRADIUM_STT_MODEL", "default"),

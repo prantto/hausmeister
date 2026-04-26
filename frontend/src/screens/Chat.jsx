@@ -7,7 +7,7 @@ import { ask, transcribe } from "../lib/api.js";
 import { useVoiceRecorder } from "../hooks/useVoiceRecorder.js";
 import { speak, stop as stopTTS, ttsSupported } from "../lib/tts.js";
 
-export default function Chat() {
+export default function Chat({ onClose } = {}) {
   const [messages, setMessages] = useState(SAMPLE_CHAT);
   const [draft, setDraft] = useState("");
   const [pending, setPending] = useState(false);
@@ -49,9 +49,10 @@ export default function Chat() {
       const res = await ask({ handle, question: text });
       setCited(res.cited?.map((c) => c.handle) || null);
       handleHausReply(res.answer);
-    } catch {
+    } catch (err) {
+      console.error("[/ask] failed:", err);
       handleHausReply(
-        "Na ja. The corpus is unreachable. Probably a CORS error. Look again. (§19)"
+        `Na ja. The corpus is unreachable — ${err.message || err}. (§19)`
       );
     } finally {
       setPending(false);
@@ -97,7 +98,14 @@ export default function Chat() {
         minHeight: 0,
       }}
     >
-      <TopBar subtitle="On duty" right={<span style={{ fontSize: 10, letterSpacing: "0.12em" }}>247 scraps · sweeping</span>} />
+      {onClose ? (
+        <div style={{ padding: "10px 14px", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <span className="hm-stamp-label" style={{ color: "var(--olive)" }}>☞ ask the Hausmeister</span>
+          <button onClick={onClose} className="hm-chip" style={{ cursor: "pointer", background: "transparent" }}>✕ close</button>
+        </div>
+      ) : (
+        <TopBar subtitle="On duty" right={<span style={{ fontSize: 10, letterSpacing: "0.12em" }}>247 scraps · sweeping</span>} />
+      )}
 
       <div
         style={{
@@ -156,7 +164,7 @@ export default function Chat() {
           </button>
         )}
         <Link
-          to="/talk"
+          to="/m/talk"
           className="hm-chip hm-reset"
           style={{ color: "var(--yellow-faded)", borderColor: "var(--yellow-faded)" }}
           title="Real-time conversation"
@@ -292,7 +300,7 @@ export default function Chat() {
         </button>
       </form>
 
-      <TabBar />
+      {!onClose && <TabBar />}
     </div>
   );
 }

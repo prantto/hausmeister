@@ -21,7 +21,7 @@ export default function Onboarding() {
 
   const enter = () => {
     localStorage.setItem("hm.onboarded", "1");
-    navigate("/chat");
+    navigate("/m/chat");
   };
 
   return (

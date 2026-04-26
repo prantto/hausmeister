@@ -13,23 +13,22 @@ function PhoneRoute({ children }) {
   return <PhoneShell>{children}</PhoneShell>;
 }
 
-function Index() {
-  const onboarded = localStorage.getItem("hm.onboarded") === "1";
-  return <Navigate to={onboarded ? "/chat" : "/onboarding"} replace />;
-}
-
 export default function App() {
   return (
     <Routes>
-      <Route path="/" element={<Index />} />
-      <Route path="/onboarding" element={<PhoneRoute><Onboarding /></PhoneRoute>} />
-      <Route path="/chat"       element={<PhoneRoute><Chat /></PhoneRoute>} />
-      <Route path="/submit"     element={<PhoneRoute><Submit /></PhoneRoute>} />
-      <Route path="/rules"      element={<PhoneRoute><Rules /></PhoneRoute>} />
-      <Route path="/wall"         element={<Wall />} />
+      <Route path="/" element={<Wall />} />
+      <Route path="/wall" element={<Navigate to="/" replace />} />
+
+      <Route path="/m"            element={<Navigate to="/m/chat" replace />} />
+      <Route path="/m/onboarding" element={<PhoneRoute><Onboarding /></PhoneRoute>} />
+      <Route path="/m/chat"       element={<PhoneRoute><Chat /></PhoneRoute>} />
+      <Route path="/m/submit"     element={<PhoneRoute><Submit /></PhoneRoute>} />
+      <Route path="/m/rules"      element={<PhoneRoute><Rules /></PhoneRoute>} />
+      <Route path="/m/talk"       element={<PhoneRoute><Talk /></PhoneRoute>} />
+
       <Route path="/tagesbericht" element={<Tagesbericht />} />
       <Route path="/admin"        element={<Admin />} />
-      <Route path="/talk"         element={<PhoneRoute><Talk /></PhoneRoute>} />
+
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

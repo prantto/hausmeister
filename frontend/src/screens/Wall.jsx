@@ -1,7 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import QRPlaceholder from "../components/QRPlaceholder.jsx";
-import { WALL_FEED } from "../data/corpus.js";
-import { fetchWall } from "../lib/api.js";
+import Chat from "./Chat.jsx";
+import Submit from "./Submit.jsx";
+import { SEED_HAUSREGELN, WALL_FEED } from "../data/corpus.js";
+import { fetchRecent, fetchTagesbericht, fetchWall, generateScrap } from "../lib/api.js";
 
 const FALLBACK = WALL_FEED.filter((w) => w.type === "scrap").map((s, i) => ({
   id: `seed-${i}`,
@@ -15,20 +17,52 @@ const FALLBACK_COUNTS = { total: 247, on_wall: 61 };
 
 export default function Wall() {
   const [scraps, setScraps] = useState(FALLBACK);
+  const [recent, setRecent] = useState([]);
   const [counts, setCounts] = useState(FALLBACK_COUNTS);
   const [live, setLive] = useState(false);
+  const [bericht, setBericht] = useState(null);
+  const [ruleIdx, setRuleIdx] = useState(0);
+  const [panel, setPanel] = useState(null); // null | 'chat' | 'submit'
+  const [generating, setGenerating] = useState(false);
+
+  const handleGenerate = async () => {
+    if (generating) return;
+    setGenerating(true);
+    try {
+      const scrap = await generateScrap();
+      // Insert at the top of scraps
+      setScraps((prev) => [
+        {
+          id: scrap.id,
+          handle: scrap.handle,
+          body: scrap.body,
+          funny_score: scrap.funny_score,
+          created_at: scrap.created_at,
+        },
+        ...prev,
+      ]);
+    } catch (err) {
+      console.error("generation failed:", err);
+    } finally {
+      setGenerating(false);
+    }
+  };
 
   useEffect(() => {
     let cancelled = false;
     const tick = async () => {
       try {
-        const feed = await fetchWall({ limit: 8, minScore: 6 });
+        const [wallFeed, recentFeed] = await Promise.all([
+          fetchWall({ limit: 8, minScore: 6 }),
+          fetchRecent({ limit: 12 }),
+        ]);
         if (cancelled) return;
-        if (feed.scraps?.length) {
-          setScraps(feed.scraps);
+        if (wallFeed.scraps?.length) {
+          setScraps(wallFeed.scraps);
           setLive(true);
         }
-        if (feed.counts) setCounts(feed.counts);
+        if (wallFeed.counts) setCounts(wallFeed.counts);
+        if (recentFeed.scraps?.length) setRecent(recentFeed.scraps);
       } catch {
         // backend offline — keep showing the seed feed
       }
@@ -40,6 +74,52 @@ export default function Wall() {
       clearInterval(id);
     };
   }, []);
+
+  // Tagesbericht refreshes much slower — backend caches 5 min anyway.
+  useEffect(() => {
+    let cancelled = false;
+    const pull = async () => {
+      try {
+        const tb = await fetchTagesbericht();
+        if (!cancelled && tb) setBericht(tb);
+      } catch {
+        // soft fail — the right column just won't show the bericht line
+      }
+    };
+    pull();
+    const id = setInterval(pull, 90_000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, []);
+
+  // Rotate one Hausregel every 12s so the §-stamp feels alive.
+  useEffect(() => {
+    const id = setInterval(
+      () => setRuleIdx((i) => (i + 1) % SEED_HAUSREGELN.length),
+      12_000
+    );
+    return () => clearInterval(id);
+  }, []);
+
+  const overheard = useMemo(() => {
+    // Pick a recent scrap that's NOT already on the main wall (left col),
+    // so the "just overheard" line shows fresh, lower-score material.
+    const wallIds = new Set(scraps.slice(0, 4).map((s) => s.id));
+    return recent.find((s) => !wallIds.has(s.id)) || null;
+  }, [scraps, recent]);
+
+  const rule = SEED_HAUSREGELN[ruleIdx];
+  const berichtLine = bericht?.intro || bericht?.sections?.[0]?.body;
+  const berichtQ = bericht ? `Tagesbericht ${bericht.date}` : null;
+
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 30_000);
+    return () => clearInterval(id);
+  }, []);
+  const clock = `${now.toLocaleDateString("en-US", { weekday: "short" }).toUpperCase()} ${now.toTimeString().slice(0, 5)}`;
 
   const ticker = [
     `${counts.total} scraps logged`,
@@ -90,9 +170,69 @@ export default function Wall() {
             {counts.total} logged · {counts.on_wall} on wall
           </span>
           <span className="hm-stamp-label" style={{ color: "var(--olive)", fontSize: 12 }}>
-            ● SAT 13:47
+            ● {clock}
           </span>
         </div>
+      </div>
+
+      <div
+        style={{
+          display: "flex",
+          gap: 0,
+          borderBottom: "2px solid var(--olive)",
+        }}
+      >
+        <button
+          onClick={() => setPanel(panel === "submit" ? null : "submit")}
+          style={{
+            flex: 1,
+            padding: "18px 28px",
+            background: panel === "submit" ? "var(--olive)" : "var(--card)",
+            color: panel === "submit" ? "var(--ink)" : "var(--bone)",
+            border: "none",
+            borderRight: "2px solid var(--olive)",
+            cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            gap: 16,
+            textAlign: "left",
+          }}
+        >
+          <span style={{ fontSize: 28 }}>✏</span>
+          <span>
+            <div className="hm-display" style={{ fontSize: 22, letterSpacing: "-0.02em", lineHeight: 1 }}>
+              DROP A SCRAP
+            </div>
+            <div className="hm-stamp-label" style={{ marginTop: 4, fontSize: 11, color: panel === "submit" ? "var(--ink)" : "var(--muted-foreground)" }}>
+              throw something on the Komposthaufen
+            </div>
+          </span>
+        </button>
+        <button
+          onClick={() => setPanel(panel === "chat" ? null : "chat")}
+          style={{
+            flex: 1,
+            padding: "18px 28px",
+            background: panel === "chat" ? "var(--olive)" : "transparent",
+            color: panel === "chat" ? "var(--ink)" : "var(--bone)",
+            border: "none",
+            cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            gap: 16,
+            textAlign: "left",
+          }}
+        >
+          <span style={{ fontSize: 28 }}>⌨</span>
+          <span>
+            <div className="hm-display" style={{ fontSize: 22, letterSpacing: "-0.02em", lineHeight: 1 }}>
+              ASK HAUSMEISTER
+            </div>
+            <div className="hm-stamp-label" style={{ marginTop: 4, fontSize: 11, color: panel === "chat" ? "var(--ink)" : "var(--muted-foreground)" }}>
+              he has read everything. he is not happy about it.
+            </div>
+          </span>
+        </button>
       </div>
 
       <div className="hm-wall-grid" style={{ flex: 1, overflow: "hidden" }}>
@@ -168,22 +308,18 @@ export default function Wall() {
             }}
           >
             <div className="hm-stamp-label" style={{ color: "var(--olive-deep)", marginBottom: 8 }}>
-              In response to: "what's table 14 doing?"
+              {berichtQ || "Latest Tagesbericht"}
             </div>
             <div
               style={{
-                fontSize: 22,
+                fontSize: 20,
                 lineHeight: 1.35,
                 fontFamily: "JetBrains Mono, monospace",
                 fontWeight: 500,
               }}
             >
-              Table 14 has had their first{" "}
-              <span style={{ background: "var(--yellow-faded)", padding: "0 4px" }}>
-                "we should pivot"
-              </span>
-              , which is hackathon-Latin for{" "}
-              <span style={{ fontStyle: "italic" }}>"we are out, but with style"</span>.
+              {berichtLine ||
+                "Tagesbericht is being prepared. The Hausmeister sweeps."}
             </div>
           </div>
 
@@ -204,38 +340,16 @@ export default function Wall() {
                     letterSpacing: "-0.02em",
                   }}
                 >
-                  §19
+                  §{rule.n}
                 </div>
                 <div style={{ flex: 1, fontSize: 15, lineHeight: 1.4, padding: "6px 0" }}>
-                  CORS errors are typos. Always. Forever. Look again.
+                  {rule.rule}
                   <div
                     className="hm-stamp-label"
                     style={{ color: "var(--muted-foreground)", marginTop: 4 }}
                   >
-                    NEU · derived from lampe-90 · 02:18
+                    Hausregeln · rotating
                   </div>
-                </div>
-              </div>
-
-              <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 0" }}>
-                <div
-                  style={{
-                    width: 32,
-                    height: 32,
-                    background: "var(--olive)",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                >
-                  <div style={{ display: "flex", gap: 2, alignItems: "center", height: 18 }}>
-                    {[6, 14, 10, 18, 8].map((h, i) => (
-                      <div key={i} style={{ width: 2, height: h, background: "var(--ink)" }} />
-                    ))}
-                  </div>
-                </div>
-                <div className="hm-stamp-label" style={{ color: "var(--muted-foreground)" }}>
-                  speaking · TTS · 8.4s
                 </div>
               </div>
 
@@ -246,27 +360,60 @@ export default function Wall() {
                 >
                   ☞ just overheard
                 </div>
-                <div
-                  style={{
-                    fontSize: 13,
-                    lineHeight: 1.45,
-                    color: "var(--muted-foreground)",
-                    fontStyle: "italic",
-                  }}
-                >
-                  "my cofounder just used the word 'moat' and i felt my soul leave my body."
-                  <span
-                    className="hm-display"
+                {overheard ? (
+                  <div
                     style={{
-                      color: "var(--olive)",
-                      fontStyle: "normal",
-                      fontSize: 12,
-                      marginLeft: 6,
+                      fontSize: 13,
+                      lineHeight: 1.45,
+                      color: "var(--muted-foreground)",
+                      fontStyle: "italic",
                     }}
                   >
-                    muelltonne-15
-                  </span>
-                </div>
+                    "{overheard.body}"
+                    <span
+                      className="hm-display"
+                      style={{
+                        color: "var(--olive)",
+                        fontStyle: "normal",
+                        fontSize: 12,
+                        marginLeft: 6,
+                      }}
+                    >
+                      {overheard.handle}
+                    </span>
+                  </div>
+                ) : (
+                  <div
+                    style={{
+                      fontSize: 13,
+                      color: "var(--muted-foreground)",
+                      fontStyle: "italic",
+                    }}
+                  >
+                    Komposthaufen is quiet.
+                  </div>
+                )}
+              </div>
+
+              <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid var(--border)" }}>
+                <button
+                  onClick={handleGenerate}
+                  disabled={generating}
+                  style={{
+                    width: "100%",
+                    padding: "8px 10px",
+                    background: "var(--card)",
+                    border: "1px solid var(--border)",
+                    color: "var(--muted-foreground)",
+                    fontSize: 11,
+                    cursor: generating ? "not-allowed" : "pointer",
+                    opacity: generating ? 0.6 : 1,
+                    fontFamily: "JetBrains Mono, monospace",
+                    letterSpacing: "0.06em",
+                  }}
+                >
+                  {generating ? "sweeping…" : "☞ erzähl mir was"}
+                </button>
               </div>
             </div>
 
@@ -344,6 +491,33 @@ export default function Wall() {
           ))}
         </div>
       </div>
+      {panel && (
+        <>
+          <div
+            onClick={() => setPanel(null)}
+            style={{
+              position: "fixed", inset: 0,
+              background: "rgba(0,0,0,0.45)",
+              zIndex: 40,
+            }}
+          />
+          <div
+            style={{
+              position: "fixed", top: 0, right: 0, bottom: 0,
+              width: 440,
+              background: "var(--ink)",
+              borderLeft: "2px solid var(--olive)",
+              zIndex: 41,
+              display: "flex",
+              flexDirection: "column",
+              overflow: "hidden",
+            }}
+          >
+            {panel === "chat"   && <Chat   onClose={() => setPanel(null)} />}
+            {panel === "submit" && <Submit onClose={() => setPanel(null)} />}
+          </div>
+        </>
+      )}
     </div>
   );
 }

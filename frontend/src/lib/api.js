@@ -28,8 +28,18 @@ export async function ask({ handle, question }) {
   return request("POST", "/ask", { body: { handle, question } });
 }
 
+export async function generateScrap() {
+  return request("POST", "/generate-scrap");
+}
+
 export async function fetchWall({ limit = 8, minScore = 6 } = {}) {
   return request("GET", `/wall?limit=${limit}&min_score=${minScore}`);
+}
+
+// Same /wall endpoint, but with min_score=0 so we get *every* recent scrap,
+// including the boring 1–5/10 ones — useful for the "just overheard" column.
+export async function fetchRecent({ limit = 12 } = {}) {
+  return request("GET", `/wall?limit=${limit}&min_score=0`);
 }
 
 export async function fetchTagesbericht({ refresh = false } = {}) {
@@ -60,8 +70,12 @@ export async function transcribe(blob) {
   return res.json();
 }
 
-export async function fetchVoiceToken(handle) {
-  return request("POST", "/voice/token", { body: { handle } });
+export function voiceStreamUrl() {
+  // Convert http(s)://host → ws(s)://host for the /voice/stream WebSocket.
+  const u = new URL(BASE);
+  u.protocol = u.protocol === "https:" ? "wss:" : "ws:";
+  u.pathname = u.pathname.replace(/\/$/, "") + "/voice/stream";
+  return u.toString();
 }
 
 export async function tts(text, voiceId) {

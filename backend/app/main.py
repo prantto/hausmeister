@@ -8,12 +8,12 @@ from contextlib import asynccontextmanager
 from uuid import UUID
 
 from dotenv import load_dotenv
-from fastapi import Depends, FastAPI, File, Header, HTTPException, UploadFile, status
+from fastapi import Depends, FastAPI, File, Header, HTTPException, UploadFile, WebSocket, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
-from . import db, livekit_token, llm, news, voice
+from . import db, llm, news, voice, voice_stream
 from .schemas import (
     AdminScrap,
     AskIn,
@@ -72,6 +72,8 @@ async def transcribe(file: UploadFile = File(...)):
     try:
         text = await voice.transcribe(audio, file.content_type or "audio/webm")
     except RuntimeError as exc:
+        import logging
+        logging.getLogger("hausmeister.voice").error("transcribe failed: %s", exc)
         raise HTTPException(status_code=502, detail=str(exc))
     return {"text": text}
 
@@ -90,29 +92,21 @@ async def tts(payload: TTSIn):
     return Response(content=audio, media_type=ctype)
 
 
-class VoiceTokenIn(BaseModel):
-    handle: str = Field(min_length=1, max_length=64)
+@app.websocket("/voice/stream")
+async def voice_stream_route(ws: WebSocket):
+    """Real-time voice loop for /talk, driven by gradbot.
+
+    The browser sends `{type:"start", voice_id, language}` then streams
+    audio (PCM or OggOpus depending on /api/audio-config). gradbot runs
+    Gradium STT → Gemini Flash via OpenAI-compat → Gradium TTS, and pipes
+    transcripts + audio + audio_timing back over the same socket. RAG
+    enters via the `lookup_corpus` tool — see app/voice_stream.py."""
+    await voice_stream.run(ws)
 
 
-class VoiceTokenOut(BaseModel):
-    token: str
-    url: str
-    room: str
-
-
-@app.post("/voice/token", response_model=VoiceTokenOut)
-async def voice_token(payload: VoiceTokenIn):
-    """Mint a LiveKit access token. The browser uses this to join a room;
-    the Hausmeister voice agent worker is dispatched into the same room."""
-    livekit_url = os.environ.get("LIVEKIT_URL")
-    if not livekit_url:
-        raise HTTPException(status_code=503, detail="LIVEKIT_URL not configured")
-    try:
-        room = livekit_token.room_for_handle(payload.handle)
-        token = livekit_token.mint_token(identity=payload.handle, room=room)
-    except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc))
-    return VoiceTokenOut(token=token, url=livekit_url, room=room)
+# Mount gradbot's /api/voices + /api/audio-config helper routes so the
+# frontend voice picker has a catalog to render against.
+voice_stream.setup_routes(app)
 
 
 _TAGESBERICHT_CACHE: dict = {}  # 5-minute LLM cache so repeated wall pulls are cheap
@@ -248,6 +242,37 @@ async def admin_delete(scrap_id: UUID):
     return {"deleted": str(scrap_id)}
 
 
+@app.post("/admin/seed-scraps", dependencies=[Depends(require_admin)])
+async def seed_scraps(count: int = 20):
+    """Generate N scraps in Hausmeister voice and insert them."""
+    scraps = []
+    for _ in range(count):
+        try:
+            gen = llm.generate_scrap()
+            body = gen.get("body", "").strip()
+            if not body:
+                continue
+            tags = gen.get("tags", [])
+            funny = gen.get("funny_score", 4)
+            scraps.append((body, "generated", funny, None, tags, None))
+        except Exception as e:
+            import logging
+            logging.getLogger("hausmeister.seed").warning("generate failed: %s", e)
+
+    async with db.conn() as c:
+        async with c.cursor() as cur:
+            for body, kind, funny, funny_reason, tags, embedding in scraps:
+                await cur.execute(
+                    """
+                    INSERT INTO scraps (handle, body, kind, funny_score, funny_reason, tags, embedding)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    """,
+                    ("der_hausmeister", body, kind, funny, funny_reason, tags, embedding),
+                )
+        await c.commit()
+    return {"seeded": len(scraps)}
+
+
 @app.post("/scrap", response_model=ScrapOut)
 async def submit_scrap(payload: ScrapIn):
     verdict = llm.filter_scrap(payload.body)
@@ -320,10 +345,10 @@ async def ask_the_news(payload: AskIn):
         async with c.cursor() as cur:
             await cur.execute(
                 """
-                SELECT id, handle, body, 1 - (embedding <=> %s) AS score
+                SELECT id, handle, body, 1 - (embedding <=> %s::vector) AS score
                 FROM scraps
                 WHERE embedding IS NOT NULL
-                ORDER BY embedding <=> %s
+                ORDER BY embedding <=> %s::vector
                 LIMIT 12
                 """,
                 (qvec, qvec),
@@ -346,16 +371,25 @@ async def ask(payload: AskIn):
     if not payload.question.strip():
         raise HTTPException(status_code=400, detail="question is empty")
 
-    qvec = llm.embed(payload.question)
+    try:
+        qvec = llm.embed(payload.question)
+    except Exception as exc:
+        msg = str(exc)
+        status = 502
+        if "429" in msg or "RESOURCE_EXHAUSTED" in msg:
+            status = 429
+        elif "API key" in msg or "401" in msg or "INVALID_ARGUMENT" in msg:
+            status = 401
+        raise HTTPException(status_code=status, detail=f"embed: {msg[:300]}")
 
     async with db.conn() as c:
         async with c.cursor() as cur:
             await cur.execute(
                 """
-                SELECT id, handle, body, 1 - (embedding <=> %s) AS score
+                SELECT id, handle, body, 1 - (embedding <=> %s::vector) AS score
                 FROM scraps
                 WHERE embedding IS NOT NULL
-                ORDER BY embedding <=> %s
+                ORDER BY embedding <=> %s::vector
                 LIMIT 20
                 """,
                 (qvec, qvec),
@@ -363,9 +397,45 @@ async def ask(payload: AskIn):
             rows = await cur.fetchall()
 
     retrieved = [{"id": r[0], "handle": r[1], "body": r[2], "score": float(r[3])} for r in rows]
-    answer_text = llm.answer(payload.question, retrieved)
+    try:
+        answer_text = llm.answer(payload.question, retrieved)
+    except Exception as exc:
+        # Surface the upstream error cleanly so the browser doesn't see a
+        # CORS-headerless 500. Most common: Gemini 429 quota.
+        msg = str(exc)
+        status = 502
+        if "429" in msg or "RESOURCE_EXHAUSTED" in msg:
+            status = 429
+        raise HTTPException(status_code=status, detail=f"LLM upstream: {msg[:300]}")
 
     return AskOut(
         answer=answer_text,
         cited=[CitedScrap(id=r["id"], handle=r["handle"], body=r["body"], score=r["score"]) for r in retrieved[:5]],
+    )
+
+
+@app.post("/generate-scrap", response_model=ScrapOut)
+async def generate_scrap():
+    """Hausmeister generates a scrap. Returns a new observation in his voice."""
+    try:
+        gen = llm.generate_scrap()
+        body = gen.get("body", "").strip()
+        if not body:
+            raise RuntimeError("generator produced empty scrap")
+        tags = gen.get("tags", [])
+        funny = gen.get("funny_score", 4)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"generator: {str(exc)[:300]}")
+
+    now = __import__("datetime").datetime.utcnow()
+    return ScrapOut(
+        id=UUID(int=0),
+        handle="der_hausmeister",
+        body=body,
+        kind="generated",
+        funny_score=funny,
+        funny_reason=None,
+        tags=tags,
+        created_at=now,
+        accepted=True,
     )
